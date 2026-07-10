@@ -188,6 +188,10 @@ export default function ExpenseModal({
             onClick={() => {
               setTab(t.id);
               setAiError(null);
+              // Reset capture provenance so the saved expense reflects the tab actually used.
+              setSource("manual");
+              setReceiptUrl(null);
+              setRawInput(null);
             }}
             className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${
               tab === t.id ? "bg-forest text-cream shadow-card" : "text-forest-dark"

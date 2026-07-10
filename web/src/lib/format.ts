@@ -27,6 +27,12 @@ export function formatCompactMoney(amount: number | string, currency = "INR") {
   return `${sign}${symbol}${Math.round(abs)}`;
 }
 
+/** First day of the current month as YYYY-MM-DD in the user's *local* timezone (not UTC). */
+export function currentMonthStart(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
 /** "2026-07" -> "Jul" (or "Jul '26" with year). */
 export function formatMonthLabel(month: string, withYear = false) {
   const [y, m] = month.split("-");

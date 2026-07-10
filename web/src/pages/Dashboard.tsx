@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiGet } from "@/lib/api";
 import type { Expense, Income, MonthlySummary } from "@/types";
-import { formatMoney } from "@/lib/format";
+import { currentMonthStart, formatMoney } from "@/lib/format";
 import ExpenseModal from "@/components/ExpenseModal";
 import IncomeModal from "@/components/IncomeModal";
 import ExpenseRow from "@/components/ExpenseRow";
@@ -21,23 +21,27 @@ export default function Dashboard() {
   const [showIncome, setShowIncome] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  const monthStartStr = monthStart.toISOString().slice(0, 10);
+  const [error, setError] = useState<string | null>(null);
 
   async function loadAll() {
     setLoading(true);
-    const [m, y, e, i] = await Promise.all([
-      apiGet(`/api/reports/monthly-summary?from=${monthStartStr}`),
-      apiGet(`/api/reports/monthly-summary`),
-      apiGet("/api/expenses?limit=6"),
-      apiGet("/api/incomes?limit=6"),
-    ]);
-    setMonthSummary(m);
-    setYearSummary(y);
-    setRecentExpenses(e ?? []);
-    setRecentIncomes(i ?? []);
-    setLoading(false);
+    setError(null);
+    try {
+      const [m, y, e, i] = await Promise.all([
+        apiGet(`/api/reports/monthly-summary?from=${currentMonthStart()}`),
+        apiGet(`/api/reports/monthly-summary`),
+        apiGet("/api/expenses?limit=6"),
+        apiGet("/api/incomes?limit=6"),
+      ]);
+      setMonthSummary(m);
+      setYearSummary(y);
+      setRecentExpenses(e ?? []);
+      setRecentIncomes(i ?? []);
+    } catch (err: any) {
+      setError(err?.message ?? "Couldn't load your dashboard. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -79,6 +83,15 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
+
+      {error && (
+        <div className="mb-6 flex items-center justify-between rounded-xl2 bg-coral/10 p-4 text-sm text-coral-dark">
+          <span>{error}</span>
+          <button onClick={loadAll} className="font-semibold underline">
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Hero: this month's income -> expenses -> savings */}
       <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">

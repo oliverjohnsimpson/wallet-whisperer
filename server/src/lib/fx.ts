@@ -37,10 +37,12 @@ async function fetchRate(from: string, to: string): Promise<number | null> {
 
 /** Convert `amount` from `from` currency into `to` (the user's primary currency). */
 export async function convertToPrimary(amount: number, from: string, to: string): Promise<Conversion> {
-  if (!from || !to || from === to) {
+  const src = (from || "").toUpperCase();
+  const dst = (to || "").toUpperCase();
+  if (!src || !dst || src === dst) {
     return { amountPrimary: round2(amount), fxRate: 1 };
   }
-  const rate = await fetchRate(from, to);
+  const rate = await fetchRate(src, dst);
   if (rate == null) return { amountPrimary: null, fxRate: null };
   return { amountPrimary: round2(amount * rate), fxRate: rate };
 }

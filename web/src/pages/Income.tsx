@@ -1,27 +1,36 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "@/lib/api";
-import type { Income } from "@/types";
-import { formatMoney } from "@/lib/format";
+import type { Income, MonthlySummary } from "@/types";
+import { currentMonthStart, formatMoney } from "@/lib/format";
 import IncomeRow from "@/components/IncomeRow";
 import IncomeModal from "@/components/IncomeModal";
 
 export default function IncomePage() {
   const [incomes, setIncomes] = useState<Income[]>([]);
+  const [monthSummary, setMonthSummary] = useState<MonthlySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
 
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  const monthStartStr = monthStart.toISOString().slice(0, 10);
+  async function load() {
+    setLoading(true);
+    try {
+      const [list, summary] = await Promise.all([
+        apiGet("/api/incomes"),
+        apiGet(`/api/reports/monthly-summary?from=${currentMonthStart()}`),
+      ]);
+      setIncomes(list ?? []);
+      setMonthSummary(summary);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    apiGet("/api/incomes")
-      .then((data) => setIncomes(data ?? []))
-      .finally(() => setLoading(false));
+    load();
   }, []);
 
-  const thisMonth = incomes.filter((i) => i.received_date >= monthStartStr);
-  const thisMonthTotal = thisMonth.reduce((sum, i) => sum + Number(i.amount_primary ?? i.amount), 0);
+  const currency = monthSummary?.primaryCurrency ?? "INR";
+  const thisMonthTotal = monthSummary?.totals.income ?? 0;
 
   return (
     <div className="p-8">
@@ -40,8 +49,7 @@ export default function IncomePage() {
 
       <div className="mb-8 rounded-xl2 bg-forest p-5 text-cream shadow-soft sm:max-w-xs">
         <p className="text-xs font-semibold uppercase tracking-wide text-cream/70">Income this month</p>
-        <p className="mt-1 font-display text-3xl font-extrabold">{formatMoney(thisMonthTotal)}</p>
-        <p className="mt-1 text-xs text-cream/70">{thisMonth.length} entries</p>
+        <p className="mt-1 font-display text-3xl font-extrabold">{formatMoney(thisMonthTotal, currency)}</p>
       </div>
 
       {!loading && incomes.length === 0 && (
@@ -58,7 +66,11 @@ export default function IncomePage() {
       </div>
 
       {showModal && (
-        <IncomeModal onClose={() => setShowModal(false)} onCreated={(i) => setIncomes((prev) => [i, ...prev])} />
+        <IncomeModal
+          defaultCurrency={currency}
+          onClose={() => setShowModal(false)}
+          onCreated={() => load()}
+        />
       )}
     </div>
   );

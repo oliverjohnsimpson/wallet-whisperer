@@ -46,11 +46,14 @@ async function buildUserFinancialContext(db: typeof supabaseAdmin, userId: strin
       .limit(150),
   ]);
 
+  // Only count amounts we could express in the primary currency, so the totals
+  // handed to Penny match the dashboard (which excludes un-converted entries).
   const spentByBudget = new Map<string, number>();
   const spentByCategory = new Map<string, number>();
   let totalExpenses = 0;
   for (const e of expenses ?? []) {
-    const v = Number(e.amount_primary ?? e.amount);
+    if (e.amount_primary == null) continue;
+    const v = Number(e.amount_primary);
     totalExpenses += v;
     if (e.budget_id) spentByBudget.set(e.budget_id, (spentByBudget.get(e.budget_id) ?? 0) + v);
     spentByCategory.set(e.category_id, (spentByCategory.get(e.category_id) ?? 0) + v);
@@ -59,7 +62,8 @@ async function buildUserFinancialContext(db: typeof supabaseAdmin, userId: strin
   const incomeByCategory = new Map<string, number>();
   let totalIncome = 0;
   for (const i of incomes ?? []) {
-    const v = Number(i.amount_primary ?? i.amount);
+    if (i.amount_primary == null) continue;
+    const v = Number(i.amount_primary);
     totalIncome += v;
     incomeByCategory.set(i.category_id, (incomeByCategory.get(i.category_id) ?? 0) + v);
   }

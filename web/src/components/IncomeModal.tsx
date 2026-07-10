@@ -199,6 +199,10 @@ export default function IncomeModal({
             onClick={() => {
               setTab(t.id);
               setAiError(null);
+              // Reset capture provenance so the saved entry reflects the tab actually used.
+              setEntrySource("manual");
+              setReceiptUrl(null);
+              setRawInput(null);
             }}
             className={`flex-1 rounded-full py-2 text-xs font-semibold transition sm:text-sm ${
               tab === t.id ? "bg-forest text-cream shadow-card" : "text-forest-dark"

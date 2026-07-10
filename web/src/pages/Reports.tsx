@@ -6,7 +6,6 @@ import {
   Cell,
   ComposedChart,
   Legend,
-  Line,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -44,20 +43,28 @@ export default function Reports() {
   const [preset, setPreset] = useState<RangePreset>("12m");
   const [summary, setSummary] = useState<MonthlySummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
 
   useEffect(() => {
     const requestId = ++requestIdRef.current;
     setLoading(true);
+    setError(null);
     const from = rangeFrom(preset);
     const params = new URLSearchParams();
-    if (from) params.set("from", from);
-    else params.set("from", "2000-01-01");
-    apiGet(`/api/reports/monthly-summary?${params.toString()}`).then((data) => {
-      if (requestId !== requestIdRef.current) return;
-      setSummary(data);
-      setLoading(false);
-    });
+    params.set("from", from ?? "2000-01-01");
+    apiGet(`/api/reports/monthly-summary?${params.toString()}`)
+      .then((data) => {
+        if (requestId !== requestIdRef.current) return;
+        setSummary(data);
+      })
+      .catch((err) => {
+        if (requestId !== requestIdRef.current) return;
+        setError(err?.message ?? "Couldn't load reports.");
+      })
+      .finally(() => {
+        if (requestId === requestIdRef.current) setLoading(false);
+      });
   }, [preset]);
 
   const currency = summary?.primaryCurrency ?? "INR";
@@ -97,7 +104,11 @@ export default function Reports() {
 
       {loading && <p className="text-forest-light">Crunching the numbers…</p>}
 
-      {!loading && summary && (
+      {error && (
+        <div className="rounded-xl2 bg-coral/10 p-4 text-sm text-coral-dark">{error}</div>
+      )}
+
+      {!loading && !error && summary && (
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <Tile label="Income" value={fmt(t.income)} className="bg-forest text-cream" muted="text-cream/70" />
@@ -149,7 +160,6 @@ export default function Reports() {
                   <Bar dataKey="income" name="Income" fill="#2D6A4F" radius={[4, 4, 0, 0]} maxBarSize={22} />
                   <Bar dataKey="expenses" name="Expenses" fill="#E86A5C" radius={[4, 4, 0, 0]} maxBarSize={22} />
                   <Area type="monotone" dataKey="savings" name="Savings" stroke="#C9821F" strokeWidth={2} fill="url(#savingsFill)" />
-                  <Line type="monotone" dataKey="savings" name="Savings" stroke="#C9821F" strokeWidth={0} dot={false} legendType="none" />
                 </ComposedChart>
               </ResponsiveContainer>
             )}

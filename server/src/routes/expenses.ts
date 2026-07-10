@@ -46,12 +46,13 @@ expensesRouter.post("/", async (req, res) => {
   const parsed = expenseInput.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
+  const currency = parsed.data.currency.toUpperCase();
   const primary = await getPrimaryCurrency(req.db, req.userId);
-  const { amountPrimary, fxRate } = await convertToPrimary(parsed.data.amount, parsed.data.currency, primary);
+  const { amountPrimary, fxRate } = await convertToPrimary(parsed.data.amount, currency, primary);
 
   const { data, error } = await req.db
     .from("expenses")
-    .insert({ ...parsed.data, user_id: req.userId, amount_primary: amountPrimary, fx_rate: fxRate })
+    .insert({ ...parsed.data, currency, user_id: req.userId, amount_primary: amountPrimary, fx_rate: fxRate })
     .select("*, categories(label, icon, color)")
     .single();
 
@@ -72,7 +73,8 @@ expensesRouter.patch("/:id", async (req, res) => {
       .eq("id", req.params.id)
       .single();
     const amount = parsed.data.amount ?? Number(existing?.amount ?? 0);
-    const currency = parsed.data.currency ?? existing?.currency ?? "INR";
+    const currency = (parsed.data.currency ?? existing?.currency ?? "INR").toUpperCase();
+    update.currency = currency;
     const primary = await getPrimaryCurrency(req.db, req.userId);
     const { amountPrimary, fxRate } = await convertToPrimary(amount, currency, primary);
     update.amount_primary = amountPrimary;

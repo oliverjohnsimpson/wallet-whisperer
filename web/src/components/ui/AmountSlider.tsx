@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { findCurrency } from "@/lib/currencies";
 import { inputClass } from "@/components/ui/FormField";
 
@@ -19,11 +20,24 @@ export default function AmountSlider({
   currency: string;
 }) {
   const numeric = Number(value) || 0;
-  const max = sliderMax(numeric);
-  const step = Math.max(1, Math.round(max / 1000));
-  const symbol = findCurrency(currency)?.symbol ?? "";
+  // The slider ceiling is kept in state and only recomputed on typed/chip changes
+  // (not while dragging), otherwise the max would rescale every tick and re-centre
+  // the thumb, making it impossible to drag toward larger amounts.
+  const [ceiling, setCeiling] = useState(() => sliderMax(numeric));
 
+  // Grow the ceiling if the amount is set externally (e.g. an AI draft) above it.
+  useEffect(() => {
+    if (numeric > ceiling) setCeiling(sliderMax(numeric));
+  }, [numeric, ceiling]);
+
+  const step = Math.max(1, Math.round(ceiling / 1000));
+  const symbol = findCurrency(currency)?.symbol ?? "";
   const chips = [100, 500, 1000, 5000];
+
+  function setTyped(v: string) {
+    onChange(v);
+    setCeiling(sliderMax(Number(v) || 0));
+  }
 
   return (
     <div className="space-y-2">
@@ -36,16 +50,16 @@ export default function AmountSlider({
           min="0"
           inputMode="decimal"
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => setTyped(e.target.value)}
           className={`${inputClass} font-display text-lg`}
         />
       </div>
       <input
         type="range"
         min="0"
-        max={max}
+        max={ceiling}
         step={step}
-        value={Math.min(numeric, max)}
+        value={Math.min(numeric, ceiling)}
         onChange={(e) => onChange(e.target.value)}
         className="ww-range w-full"
         aria-label="Amount slider"
@@ -55,7 +69,7 @@ export default function AmountSlider({
           <button
             key={c}
             type="button"
-            onClick={() => onChange(String(Math.round((numeric + c) * 100) / 100))}
+            onClick={() => setTyped(String(Math.round((numeric + c) * 100) / 100))}
             className="rounded-full bg-forest-50 px-2.5 py-1 text-xs font-semibold text-forest-dark transition hover:bg-gold/20"
           >
             +{symbol}
@@ -64,7 +78,7 @@ export default function AmountSlider({
         ))}
         <button
           type="button"
-          onClick={() => onChange("")}
+          onClick={() => setTyped("")}
           className="rounded-full px-2.5 py-1 text-xs font-semibold text-coral hover:underline"
         >
           Clear
