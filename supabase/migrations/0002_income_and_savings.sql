@@ -81,3 +81,11 @@ alter table public.expenses
   add column if not exists amount_primary numeric(14, 2);
 alter table public.expenses
   add column if not exists fx_rate numeric(18, 8);
+
+-- Backfill historical expenses already in the user's primary currency so they
+-- count in the savings rollup. Foreign-currency rows need live FX conversion —
+-- run POST /api/profile/backfill-primary for those.
+update public.expenses e
+  set amount_primary = e.amount, fx_rate = 1
+  from public.profiles p
+  where e.user_id = p.id and e.amount_primary is null and e.currency = p.primary_currency;
