@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "chaching-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace", "web"],
+      "port": 5173
+    },
+    {
+      "name": "chaching-server",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace", "server"],
+      "port": 8787
+    }
+  ]
+}

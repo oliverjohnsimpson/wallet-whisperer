@@ -1,0 +1,31 @@
+import "express-async-errors"; // must be imported before the route files below so their async handlers are patched
+import express from "express";
+import cors from "cors";
+import { env } from "./env.js";
+import { budgetsRouter } from "./routes/budgets.js";
+import { expensesRouter } from "./routes/expenses.js";
+import { categoriesRouter } from "./routes/categories.js";
+import { reportsRouter } from "./routes/reports.js";
+import { aiRouter } from "./routes/ai.js";
+
+const app = express();
+
+app.use(cors({ origin: env.webOrigin, credentials: true }));
+app.use(express.json({ limit: "2mb" }));
+
+app.get("/api/health", (_req, res) => res.json({ ok: true, service: "chaching-server" }));
+
+app.use("/api/budgets", budgetsRouter);
+app.use("/api/expenses", expensesRouter);
+app.use("/api/categories", categoriesRouter);
+app.use("/api/reports", reportsRouter);
+app.use("/api/ai", aiRouter);
+
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error(err);
+  res.status(500).json({ error: "Internal server error" });
+});
+
+app.listen(env.port, () => {
+  console.log(`ChaChing server listening on http://localhost:${env.port}`);
+});

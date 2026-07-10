@@ -1,0 +1,16 @@
+{
+  "name": "chaching",
+  "private": true,
+  "version": "0.1.0",
+  "description": "ChaChing — Listen to your money talk. AI-powered budget tracker with Penny, your AI money companion.",
+  "workspaces": [
+    "web",
+    "server"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace web",
+    "dev:server": "npm run dev --workspace server",
+    "build:web": "npm run build --workspace web",
+    "build:server": "npm run build --workspace server"
+  }
+}

@@ -1,0 +1,30 @@
+// Mirrors supabase/migrations/0001_init.sql — keep in sync.
+export const CATEGORY_IDS = [
+  "food_dining",
+  "shopping",
+  "transport",
+  "housing",
+  "utilities",
+  "work_office",
+  "technology",
+  "health_medical",
+  "personal_care",
+  "entertainment",
+  "travel",
+  "education",
+  "kids_family",
+  "pets",
+  "gifts_donations",
+  "investments",
+  "savings",
+  "emi_loans",
+  "taxes",
+  "insurance",
+  "subscriptions",
+  "fitness",
+  "lifestyle",
+  "home_essentials",
+  "miscellaneous",
+] as const;
+
+export type CategoryId = (typeof CATEGORY_IDS)[number];
