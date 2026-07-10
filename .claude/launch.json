@@ -2,16 +2,17 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "chaching-web",
+      "name": "wallet-whisperer-web",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--workspace", "web"],
       "port": 5173
     },
     {
-      "name": "chaching-server",
+      "name": "wallet-whisperer-server",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--workspace", "server"],
-      "port": 8787
+      "port": 8787,
+      "autoPort": false
     }
   ]
 }

@@ -1,8 +1,8 @@
 {
-  "name": "chaching",
+  "name": "wallet-whisperer",
   "private": true,
   "version": "0.1.0",
-  "description": "ChaChing — Listen to your money talk. AI-powered budget tracker with Penny, your AI money companion.",
+  "description": "Wallet Whisperer — Listen to your money talk. AI-powered budget tracker with Penny, your AI money companion.",
   "workspaces": [
     "web",
     "server"

@@ -1,15 +1,22 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import FinanceBackground from "@/components/FinanceBackground";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [logoError, setLogoError] = useState(false);
 
   async function signInWithProvider(provider: "google" | "azure") {
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: window.location.origin + "/dashboard" },
+      options: {
+        redirectTo: window.location.origin + "/dashboard",
+        // Azure's default scope is just "openid", which doesn't include an email claim —
+        // request it explicitly so Microsoft accounts (personal or work/school) return one.
+        ...(provider === "azure" ? { scopes: "openid email profile" } : {}),
+      },
     });
     if (error) {
       setStatus("error");
@@ -33,16 +40,28 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-forest via-forest-light to-forest-dark p-4">
-      <div className="w-full max-w-md rounded-xl2 bg-cream p-8 shadow-soft">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#0f2942] p-4">
+      <FinanceBackground />
+
+      <div className="relative w-full max-w-md rounded-xl2 bg-cream p-8 shadow-soft">
         <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-forest text-3xl shadow-card">
-            💰
-          </div>
-          <h1 className="font-display text-4xl font-extrabold">
-            <span className="text-forest">Cha</span>
-            <span className="text-gold">Ching</span>
-          </h1>
+          {!logoError ? (
+            <img
+              src="/wallet-whisperer-logo.png"
+              alt="Wallet Whisperer — Listen to your money talk"
+              className="mx-auto h-28 w-auto"
+              onError={() => setLogoError(true)}
+            />
+          ) : (
+            <>
+              <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-forest text-3xl shadow-card">
+                👛
+              </div>
+              <h1 className="font-display text-4xl font-extrabold">
+                <span className="text-forest">Wallet</span> <span className="text-gold">Whisperer</span>
+              </h1>
+            </>
+          )}
           <p className="mt-1 text-sm text-forest-light">
             <span className="italic">Listen to your</span> <span className="font-semibold text-coral">money</span>{" "}
             <span className="italic">talk</span>

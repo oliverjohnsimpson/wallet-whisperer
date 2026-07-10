@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { apiGet, apiSend } from "@/lib/api";
 import type { Budget, Expense } from "@/types";
 import { BUDGET_TYPE_META } from "@/types";
-import { formatMoney, getBudgetProgress } from "@/lib/format";
+import { formatDate, formatMoney, getBudgetProgress } from "@/lib/format";
 import ExpenseModal from "@/components/ExpenseModal";
 import ExpenseRow from "@/components/ExpenseRow";
 
@@ -61,7 +61,10 @@ export default function BudgetDetail() {
           <span className="text-4xl">{budget.icon || BUDGET_TYPE_META[budget.type].icon}</span>
           <div>
             <h1 className="font-display text-2xl font-extrabold text-forest-dark">{budget.name}</h1>
-            <p className="text-sm text-forest-light">{BUDGET_TYPE_META[budget.type].label}</p>
+            <p className="text-sm text-forest-light">
+              {BUDGET_TYPE_META[budget.type].label}
+              {budget.end_date && <span> · 🎯 Target date: {formatDate(budget.end_date)}</span>}
+            </p>
           </div>
         </div>
         <div className="text-right">

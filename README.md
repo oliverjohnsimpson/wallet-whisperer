@@ -1,7 +1,7 @@
-# ChaChing 💰
+# Wallet Whisperer 👛
 ### *Listen to your money talk.*
 
-ChaChing is an AI-powered budget tracker. **Penny**, your AI money companion, helps you log
+Wallet Whisperer is an AI-powered budget tracker. **Penny**, your AI money companion, helps you log
 expenses by voice or receipt photo, answers questions about your spending, and helps you stay
 on track across multiple budgets — monthly expenses, trips, savings goals, or a big purchase.
 

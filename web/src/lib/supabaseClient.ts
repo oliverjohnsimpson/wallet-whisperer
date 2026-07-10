@@ -5,7 +5,7 @@ const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 if (!url || !anonKey) {
   console.warn(
-    "[ChaChing] Missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY. Copy web/.env.example to web/.env and fill it in."
+    "[Wallet Whisperer] Missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY. Copy web/.env.example to web/.env and fill it in."
   );
 }
 

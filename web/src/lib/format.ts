@@ -1,17 +1,11 @@
-const SYMBOLS: Record<string, string> = {
-  INR: "₹",
-  USD: "$",
-  EUR: "€",
-  GBP: "£",
-  JPY: "¥",
-};
+import { findCurrency } from "./currencies";
 
 export function formatMoney(amount: number | string, currency = "INR") {
   // Supabase/PostgREST serialize Postgres `numeric` columns as strings, so
   // callers passing a raw API value (rather than a JS-computed total) may
   // hand us a string — coerce so toLocaleString actually formats it.
   const numeric = typeof amount === "string" ? Number(amount) : amount;
-  const symbol = SYMBOLS[currency] ?? currency + " ";
+  const symbol = findCurrency(currency)?.symbol ?? currency + " ";
   if (!Number.isFinite(numeric)) return `${symbol}0`;
   return `${symbol}${numeric.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }

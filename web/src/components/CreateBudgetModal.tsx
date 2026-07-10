@@ -4,6 +4,7 @@ import type { Budget, BudgetType } from "@/types";
 import { BUDGET_TYPE_META } from "@/types";
 import Modal from "@/components/ui/Modal";
 import { FormField, inputClass } from "@/components/ui/FormField";
+import CurrencySelect from "@/components/ui/CurrencySelect";
 
 export default function CreateBudgetModal({
   onClose,
@@ -85,13 +86,7 @@ export default function CreateBudgetModal({
             />
           </FormField>
           <FormField label="Currency">
-            <input
-              required
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-              maxLength={3}
-              className={`${inputClass} uppercase`}
-            />
+            <CurrencySelect value={currency} onChange={setCurrency} />
           </FormField>
         </div>
 

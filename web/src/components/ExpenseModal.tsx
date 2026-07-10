@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiGet, apiSend, apiUpload } from "@/lib/api";
 import type { Budget, Category, Expense, ExpenseDraft } from "@/types";
 import Modal from "@/components/ui/Modal";
 import { FormField, inputClass } from "@/components/ui/FormField";
+import CurrencySelect from "@/components/ui/CurrencySelect";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 
 type Tab = "manual" | "voice" | "receipt";
 
@@ -64,6 +66,11 @@ export default function ExpenseModal({
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+
+  const sortedCategories = useMemo(
+    () => [...categories].sort((a, b) => a.label.localeCompare(b.label)),
+    [categories]
+  );
 
   useEffect(() => {
     apiGet("/api/categories").then(setCategories).catch(() => {});
@@ -245,32 +252,27 @@ export default function ExpenseModal({
               />
             </FormField>
             <FormField label="Currency">
-              <input
-                required
-                value={draft.currency}
-                onChange={(e) => setDraft({ ...draft, currency: e.target.value.toUpperCase() })}
-                maxLength={3}
-                className={`${inputClass} uppercase`}
-              />
+              <CurrencySelect value={draft.currency} onChange={(code) => setDraft({ ...draft, currency: code })} />
             </FormField>
           </div>
 
           <FormField label="Category">
-            <select
-              required
+            <SearchableSelect
               value={draft.category_id}
-              onChange={(e) => setDraft({ ...draft, category_id: e.target.value })}
-              className={inputClass}
-            >
-              <option value="" disabled>
-                Select a category
-              </option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.icon} {c.label}
-                </option>
-              ))}
-            </select>
+              onChange={(id) => setDraft({ ...draft, category_id: id })}
+              options={sortedCategories}
+              getValue={(c) => c.id}
+              getSearchText={(c) => c.label}
+              getDisplayValue={(c) => `${c.icon} ${c.label}`}
+              placeholder="Search category…"
+              emptyLabel="No matching category"
+              renderOption={(c) => (
+                <>
+                  <span className="w-6 shrink-0">{c.icon}</span>
+                  <span className="text-forest-dark">{c.label}</span>
+                </>
+              )}
+            />
           </FormField>
 
           <FormField label="Budget (optional)">

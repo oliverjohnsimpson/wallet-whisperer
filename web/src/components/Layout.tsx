@@ -18,11 +18,11 @@ export default function Layout({ children }: { children: ReactNode }) {
       <aside className="flex w-60 shrink-0 flex-col justify-between border-r border-forest/10 bg-white/60 p-4">
         <div>
           <div className="mb-8 flex items-center gap-2 px-2">
-            <span className="text-2xl">💰</span>
-            <span className="font-display text-xl font-extrabold">
-              <span className="text-forest">Cha</span>
-              <span className="text-gold">Ching</span>
-            </span>
+            <img src="/wallet-icon.png" alt="" className="h-8 w-auto" />
+            <div className="leading-none">
+              <p className="font-display text-lg font-extrabold text-forest">Wallet</p>
+              <p className="text-[10px] font-bold tracking-widest text-gold-dark">WHISPERER</p>
+            </div>
           </div>
           <nav className="space-y-1">
             {NAV_ITEMS.map((item) => (

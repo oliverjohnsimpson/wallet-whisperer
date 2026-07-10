@@ -20,7 +20,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-cream text-forest">
-        <span className="animate-pulse font-display text-xl">ChaChing is warming up…</span>
+        <span className="animate-pulse font-display text-xl">Wallet Whisperer is warming up…</span>
       </div>
     );
   }
