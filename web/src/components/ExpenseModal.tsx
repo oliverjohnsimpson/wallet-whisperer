@@ -5,6 +5,7 @@ import Modal from "@/components/ui/Modal";
 import { FormField, inputClass } from "@/components/ui/FormField";
 import CurrencySelect from "@/components/ui/CurrencySelect";
 import SearchableSelect from "@/components/ui/SearchableSelect";
+import AmountSlider from "@/components/ui/AmountSlider";
 
 type Tab = "manual" | "voice" | "receipt";
 
@@ -239,22 +240,17 @@ export default function ExpenseModal({
         {aiError && <p className="mb-4 rounded-lg bg-coral/10 p-2 text-sm text-coral-dark">{aiError}</p>}
 
         <form onSubmit={saveExpense} className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="Amount">
-              <input
-                required
-                type="number"
-                step="0.01"
-                min="0"
-                value={draft.amount}
-                onChange={(e) => setDraft({ ...draft, amount: e.target.value })}
-                className={inputClass}
-              />
-            </FormField>
-            <FormField label="Currency">
-              <CurrencySelect value={draft.currency} onChange={(code) => setDraft({ ...draft, currency: code })} />
-            </FormField>
-          </div>
+          <FormField label="Amount">
+            <AmountSlider
+              value={draft.amount}
+              currency={draft.currency}
+              onChange={(v) => setDraft({ ...draft, amount: v })}
+            />
+          </FormField>
+
+          <FormField label="Currency">
+            <CurrencySelect value={draft.currency} onChange={(code) => setDraft({ ...draft, currency: code })} />
+          </FormField>
 
           <FormField label="Category">
             <SearchableSelect

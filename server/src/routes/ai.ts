@@ -7,6 +7,7 @@ import { openai } from "../openai.js";
 import { env } from "../env.js";
 import { supabaseAdmin } from "../supabaseAdmin.js";
 import { CATEGORY_IDS } from "../categories.js";
+import { INCOME_CATEGORY_IDS } from "../incomeCategories.js";
 import { sendIfError } from "../lib/respond.js";
 
 export const aiRouter = Router();
@@ -15,40 +16,65 @@ aiRouter.use(requireAuth);
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
 const PENNY_PERSONA = `You are Penny, the warm, encouraging AI money companion inside the Wallet Whisperer budget
-tracker app ("Listen to your money talk"). You help users understand their spending, nudge them toward their goals, and answer
-questions about their budgets and expenses conversationally. Be concise (2-5 sentences unless asked for detail),
+tracker app ("Listen to your money talk"). You help users understand their income, spending, and savings, nudge them
+toward their goals, and answer questions conversationally. Be concise (2-5 sentences unless asked for detail),
 friendly, a little playful, and always ground your answers in the real numbers provided in the CONTEXT block — never
 invent figures. If the context doesn't contain what's needed to answer precisely, say so plainly. Use the user's
 currency symbols as given in the data. Do not give formal regulated financial/investment advice — keep suggestions
-practical and budget-focused (e.g. spending patterns, category overspend, saving tips, goal pacing).`;
+practical and budget-focused (e.g. spending patterns, category overspend, saving tips, savings rate).`;
 
 async function buildUserFinancialContext(db: typeof supabaseAdmin, userId: string) {
   const since = new Date();
   since.setDate(since.getDate() - 60);
   const sinceStr = since.toISOString().slice(0, 10);
 
-  const [{ data: budgets }, { data: expenses }] = await Promise.all([
+  const [{ data: budgets }, { data: expenses }, { data: incomes }] = await Promise.all([
     db.from("budgets").select("id, name, type, target_amount, currency, status").eq("user_id", userId),
     db
       .from("expenses")
-      .select("amount, currency, category_id, expense_date, description, merchant, budget_id")
+      .select("amount, amount_primary, currency, category_id, expense_date, description, merchant, budget_id")
       .eq("user_id", userId)
       .gte("expense_date", sinceStr)
       .order("expense_date", { ascending: false })
+      .limit(150),
+    db
+      .from("incomes")
+      .select("amount, amount_primary, currency, category_id, received_date, description, source_name")
+      .eq("user_id", userId)
+      .gte("received_date", sinceStr)
+      .order("received_date", { ascending: false })
       .limit(150),
   ]);
 
   const spentByBudget = new Map<string, number>();
   const spentByCategory = new Map<string, number>();
+  let totalExpenses = 0;
   for (const e of expenses ?? []) {
-    if (e.budget_id) spentByBudget.set(e.budget_id, (spentByBudget.get(e.budget_id) ?? 0) + Number(e.amount));
-    spentByCategory.set(e.category_id, (spentByCategory.get(e.category_id) ?? 0) + Number(e.amount));
+    const v = Number(e.amount_primary ?? e.amount);
+    totalExpenses += v;
+    if (e.budget_id) spentByBudget.set(e.budget_id, (spentByBudget.get(e.budget_id) ?? 0) + v);
+    spentByCategory.set(e.category_id, (spentByCategory.get(e.category_id) ?? 0) + v);
+  }
+
+  const incomeByCategory = new Map<string, number>();
+  let totalIncome = 0;
+  for (const i of incomes ?? []) {
+    const v = Number(i.amount_primary ?? i.amount);
+    totalIncome += v;
+    incomeByCategory.set(i.category_id, (incomeByCategory.get(i.category_id) ?? 0) + v);
   }
 
   return {
+    last60Days: {
+      totalIncome,
+      totalExpenses,
+      savings: totalIncome - totalExpenses,
+    },
     budgets: (budgets ?? []).map((b) => ({ ...b, spent: spentByBudget.get(b.id) ?? 0 })),
-    spendByCategoryLast60Days: [...spentByCategory.entries()].map(([category_id, total]) => ({ category_id, total })),
-    recentExpenses: (expenses ?? []).slice(0, 30),
+    spendByCategory: [...spentByCategory.entries()].map(([category_id, total]) => ({ category_id, total })),
+    incomeByCategory: [...incomeByCategory.entries()].map(([category_id, total]) => ({ category_id, total })),
+    recentExpenses: (expenses ?? []).slice(0, 20),
+    recentIncomes: (incomes ?? []).slice(0, 20),
   };
 }
 
@@ -108,10 +134,27 @@ aiRouter.get("/chat/history", async (req, res) => {
   res.json(data);
 });
 
-function buildExtractionInstructions(): string {
-  // Computed per-request (not a module-level const) so "today" never goes stale
-  // for the life of a long-running server process.
-  const today = new Date().toISOString().slice(0, 10);
+// ────────────────────────────────────────────────────────────
+// Kind-aware extraction (expense or income), shared by voice / photo / text.
+// ────────────────────────────────────────────────────────────
+type Kind = "expense" | "income";
+
+function buildExtractionInstructions(kind: Kind): string {
+  const today = new Date().toISOString().slice(0, 10); // per-request so it never goes stale
+  if (kind === "income") {
+    return `Extract a single income entry from the input and respond with ONLY a JSON object
+(no markdown fences) with exactly these fields:
+{
+  "amount": number,
+  "currency": "ISO 4217 3-letter code, best guess from symbols/context, default INR if unclear",
+  "category_id": one of ${JSON.stringify(INCOME_CATEGORY_IDS)},
+  "source_name": string or null (e.g. employer, brokerage, tenant, bank),
+  "description": short string summarizing the income,
+  "received_date": "YYYY-MM-DD, best guess, default to today (${today}) if unknown",
+  "confidence": number between 0 and 1
+}
+Pick the single best-fitting category_id from the allowed list (salary, dividends, interest, etc.).`;
+  }
   return `Extract a single expense from the input and respond with ONLY a JSON object
 (no markdown fences) with exactly these fields:
 {
@@ -127,7 +170,7 @@ Pick the single best-fitting category_id from the allowed list. If multiple item
 and mention the breakdown in "description".`;
 }
 
-const draftSchema = z.object({
+const expenseDraftSchema = z.object({
   amount: z.coerce.number().nonnegative(),
   currency: z.string().trim().length(3).catch("INR"),
   category_id: z.enum(CATEGORY_IDS).catch("miscellaneous"),
@@ -137,93 +180,125 @@ const draftSchema = z.object({
   confidence: z.number().min(0).max(1).catch(0.5),
 });
 
-/** Parses and validates the model's JSON draft; throws with a clear message on malformed/unusable output. */
-function parseExpenseDraft(raw: string) {
+const incomeDraftSchema = z.object({
+  amount: z.coerce.number().nonnegative(),
+  currency: z.string().trim().length(3).catch("INR"),
+  category_id: z.enum(INCOME_CATEGORY_IDS).catch("other_income"),
+  source_name: z.string().nullable().catch(null),
+  description: z.string().catch(""),
+  received_date: z.string().catch(() => new Date().toISOString().slice(0, 10)),
+  confidence: z.number().min(0).max(1).catch(0.5),
+});
+
+function parseDraft(kind: Kind, raw: string) {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
     throw new Error("Penny couldn't make sense of that — the extraction came back malformed. Try again?");
   }
-  const result = draftSchema.safeParse(parsed);
+  const schema = kind === "income" ? incomeDraftSchema : expenseDraftSchema;
+  const result = schema.safeParse(parsed);
   if (!result.success) {
     throw new Error("Penny couldn't find a valid amount in that — try again, or enter it manually.");
   }
   return result.data;
 }
 
-/** Shared by /voice-expense and /receipt-expense: runs the extraction prompt and validates the result. */
-async function extractExpenseDraft(model: string, userContent: string | Record<string, unknown>[]) {
+async function extractDraft(kind: Kind, model: string, userContent: string | Record<string, unknown>[]) {
   const completion = await openai.chat.completions.create({
     model,
     response_format: { type: "json_object" },
     messages: [
-      { role: "system", content: buildExtractionInstructions() },
+      { role: "system", content: buildExtractionInstructions(kind) },
       { role: "user", content: userContent as any },
     ],
     temperature: 0.2,
   });
-  return parseExpenseDraft(completion.choices[0]?.message?.content ?? "{}");
+  return parseDraft(kind, completion.choices[0]?.message?.content ?? "{}");
 }
 
-/** POST /api/ai/voice-expense — multipart form field "audio" → transcript + expense draft */
-aiRouter.post("/voice-expense", upload.single("audio"), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "audio file is required (field name: audio)" });
-  if (req.file.mimetype && !req.file.mimetype.startsWith("audio/")) {
-    return res.status(400).json({ error: "That file doesn't look like an audio recording." });
+async function transcribeAudio(file: Express.Multer.File): Promise<string> {
+  const audio = await toFile(file.buffer, file.originalname || "audio.webm", {
+    type: file.mimetype || "audio/webm",
+  });
+  const transcription = await openai.audio.transcriptions.create({ file: audio, model: env.transcribeModel });
+  return transcription.text;
+}
+
+async function storeReceipt(userId: string, file: Express.Multer.File): Promise<string | null> {
+  const path = `${userId}/${Date.now()}-${(file.originalname || "receipt").replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+  const { error } = await supabaseAdmin.storage
+    .from("receipts")
+    .upload(path, file.buffer, { contentType: file.mimetype, upsert: false });
+  if (error) {
+    console.error("[ai] storage upload failed", error);
+    return null;
   }
+  const { data: signed } = await supabaseAdmin.storage.from("receipts").createSignedUrl(path, 60 * 60 * 24 * 7);
+  return signed?.signedUrl ?? null;
+}
 
-  try {
-    const file = await toFile(req.file.buffer, req.file.originalname || "audio.webm", {
-      type: req.file.mimetype || "audio/webm",
-    });
-
-    const transcription = await openai.audio.transcriptions.create({
-      file,
-      model: env.transcribeModel,
-    });
-
-    const transcript = transcription.text;
-    const draft = await extractExpenseDraft(env.chatModel, transcript);
-    res.json({ transcript, draft });
-  } catch (err: any) {
-    console.error("[ai/voice-expense]", err);
-    res.status(502).json({ error: err.message || "Penny couldn't understand that recording. Try again?" });
-  }
-});
-
-/** POST /api/ai/receipt-expense — multipart form field "receipt" → expense draft + receipt_url */
-aiRouter.post("/receipt-expense", upload.single("receipt"), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "receipt image is required (field name: receipt)" });
-  if (!req.file.mimetype || !req.file.mimetype.startsWith("image/")) {
-    return res.status(400).json({ error: "Please upload an image file (JPG, PNG, HEIC, etc.)." });
-  }
-
-  try {
-    const base64 = req.file.buffer.toString("base64");
-    const dataUri = `data:${req.file.mimetype};base64,${base64}`;
-
-    const draft = await extractExpenseDraft(env.visionModel, [
-      { type: "text", text: "Extract the expense from this receipt image." },
-      { type: "image_url", image_url: { url: dataUri } },
-    ]);
-
-    const path = `${req.userId}/${Date.now()}-${(req.file.originalname || "receipt").replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from("receipts")
-      .upload(path, req.file.buffer, { contentType: req.file.mimetype, upsert: false });
-
-    let receipt_url: string | null = null;
-    if (!uploadError) {
-      const { data: signed } = await supabaseAdmin.storage.from("receipts").createSignedUrl(path, 60 * 60 * 24 * 7);
-      receipt_url = signed?.signedUrl ?? null;
-    } else {
-      console.error("[ai/receipt-expense] storage upload failed", uploadError);
+function voiceHandler(kind: Kind) {
+  return async (req: any, res: any) => {
+    if (!req.file) return res.status(400).json({ error: "audio file is required (field name: audio)" });
+    if (req.file.mimetype && !req.file.mimetype.startsWith("audio/")) {
+      return res.status(400).json({ error: "That file doesn't look like an audio recording." });
     }
+    try {
+      const transcript = await transcribeAudio(req.file);
+      const draft = await extractDraft(kind, env.chatModel, transcript);
+      res.json({ transcript, draft });
+    } catch (err: any) {
+      console.error(`[ai/voice-${kind}]`, err);
+      res.status(502).json({ error: err.message || "Penny couldn't understand that recording. Try again?" });
+    }
+  };
+}
 
-    res.json({ draft, receipt_url, receipt_path: uploadError ? null : path });
+function receiptHandler(kind: Kind) {
+  return async (req: any, res: any) => {
+    if (!req.file) return res.status(400).json({ error: "image is required (field name: receipt)" });
+    if (!req.file.mimetype || !req.file.mimetype.startsWith("image/")) {
+      return res.status(400).json({ error: "Please upload an image file (JPG, PNG, HEIC, etc.)." });
+    }
+    try {
+      const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+      const prompt =
+        kind === "income"
+          ? "Extract the income from this document (payslip, dividend note, or bank statement screenshot)."
+          : "Extract the expense from this receipt image.";
+      const draft = await extractDraft(kind, env.visionModel, [
+        { type: "text", text: prompt },
+        { type: "image_url", image_url: { url: dataUri } },
+      ]);
+      const receipt_url = await storeReceipt(req.userId, req.file);
+      res.json({ draft, receipt_url });
+    } catch (err: any) {
+      console.error(`[ai/receipt-${kind}]`, err);
+      res.status(502).json({ error: err.message || "Penny couldn't read that image. Try a clearer photo?" });
+    }
+  };
+}
+
+// Expense capture (existing behaviour, now via shared handlers)
+aiRouter.post("/voice-expense", upload.single("audio"), voiceHandler("expense"));
+aiRouter.post("/receipt-expense", upload.single("receipt"), receiptHandler("expense"));
+
+// Income capture
+aiRouter.post("/voice-income", upload.single("audio"), voiceHandler("income"));
+aiRouter.post("/receipt-income", upload.single("receipt"), receiptHandler("income"));
+
+/** POST /api/ai/parse-text — { text, kind } → { draft }. For pasted text (and future email/SMS ingestion). */
+aiRouter.post("/parse-text", async (req, res) => {
+  const text = String(req.body?.text ?? "").trim();
+  const kind: Kind = req.body?.kind === "income" ? "income" : "expense";
+  if (!text) return res.status(400).json({ error: "text is required" });
+  try {
+    const draft = await extractDraft(kind, env.chatModel, text);
+    res.json({ draft });
   } catch (err: any) {
-    console.error("[ai/receipt-expense]", err);
-    res.status(502).json({ error: err.message || "Penny couldn't read that receipt. Try a clearer photo?" });
+    console.error("[ai/parse-text]", err);
+    res.status(502).json({ error: err.message || "Penny couldn't parse that text. Try again?" });
   }
 });

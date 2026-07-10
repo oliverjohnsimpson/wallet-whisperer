@@ -23,3 +23,33 @@
     border-radius: 999px;
   }
 }
+
+/* Branded range slider used by AmountSlider */
+.ww-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 999px;
+  background: theme("colors.forest.50");
+  outline: none;
+}
+.ww-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: theme("colors.gold.DEFAULT");
+  border: 3px solid #fff;
+  box-shadow: 0 2px 6px rgba(27, 67, 50, 0.25);
+  cursor: pointer;
+}
+.ww-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: theme("colors.gold.DEFAULT");
+  border: 3px solid #fff;
+  box-shadow: 0 2px 6px rgba(27, 67, 50, 0.25);
+  cursor: pointer;
+}

@@ -4,8 +4,10 @@ import cors from "cors";
 import { env } from "./env.js";
 import { budgetsRouter } from "./routes/budgets.js";
 import { expensesRouter } from "./routes/expenses.js";
-import { categoriesRouter } from "./routes/categories.js";
+import { incomesRouter } from "./routes/incomes.js";
+import { categoriesRouter, incomeCategoriesRouter } from "./routes/categories.js";
 import { reportsRouter } from "./routes/reports.js";
+import { profileRouter } from "./routes/profile.js";
 import { aiRouter } from "./routes/ai.js";
 
 const app = express();
@@ -17,8 +19,11 @@ app.get("/api/health", (_req, res) => res.json({ ok: true, service: "wallet-whis
 
 app.use("/api/budgets", budgetsRouter);
 app.use("/api/expenses", expensesRouter);
+app.use("/api/incomes", incomesRouter);
 app.use("/api/categories", categoriesRouter);
+app.use("/api/income-categories", incomeCategoriesRouter);
 app.use("/api/reports", reportsRouter);
+app.use("/api/profile", profileRouter);
 app.use("/api/ai", aiRouter);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

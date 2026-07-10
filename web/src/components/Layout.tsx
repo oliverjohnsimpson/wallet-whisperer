@@ -5,6 +5,7 @@ import PennyChat from "@/components/PennyChat";
 
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard", icon: "🏡" },
+  { to: "/income", label: "Income", icon: "💰" },
   { to: "/budgets", label: "Budgets", icon: "💼" },
   { to: "/reports", label: "Reports", icon: "📊" },
 ];

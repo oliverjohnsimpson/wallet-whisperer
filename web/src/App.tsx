@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
+import IncomePage from "@/pages/Income";
 import Budgets from "@/pages/Budgets";
 import BudgetDetail from "@/pages/BudgetDetail";
 import Layout from "@/components/Layout";
@@ -43,6 +44,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/income"
+        element={
+          <ProtectedRoute>
+            <IncomePage />
           </ProtectedRoute>
         }
       />
