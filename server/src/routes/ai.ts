@@ -9,6 +9,9 @@ import { supabaseAdmin } from "../supabaseAdmin.js";
 import { CATEGORY_IDS } from "../categories.js";
 import { INCOME_CATEGORY_IDS } from "../incomeCategories.js";
 import { sendIfError } from "../lib/respond.js";
+import { getPrimaryCurrency } from "../lib/primaryCurrency.js";
+import { convertToPrimary } from "../lib/fx.js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const aiRouter = Router();
 aiRouter.use(requireAuth);
@@ -21,7 +24,13 @@ toward their goals, and answer questions conversationally. Be concise (2-5 sente
 friendly, a little playful, and always ground your answers in the real numbers provided in the CONTEXT block — never
 invent figures. If the context doesn't contain what's needed to answer precisely, say so plainly. Use the user's
 currency symbols as given in the data. Do not give formal regulated financial/investment advice — keep suggestions
-practical and budget-focused (e.g. spending patterns, category overspend, saving tips, savings rate).`;
+practical and budget-focused (e.g. spending patterns, category overspend, saving tips, savings rate).
+
+You can also TAKE ACTIONS for the user with your tools: log an expense, log an income, create a budget, or pull a
+fresh report summary. When the user asks you to record something or create a budget, call the matching tool, then
+confirm in one short friendly sentence what you did (with the amount and category). If a detail is ambiguous, make a
+sensible assumption and mention it rather than refusing. Default currency is the user's primary currency; default the
+date to today when unspecified.`;
 
 async function buildUserFinancialContext(db: typeof supabaseAdmin, userId: string) {
   const since = new Date();
@@ -82,7 +91,176 @@ async function buildUserFinancialContext(db: typeof supabaseAdmin, userId: strin
   };
 }
 
-/** POST /api/ai/chat — { message: string } → { reply: string } */
+// Tools Penny can call to act on the user's data.
+const PENNY_TOOLS: any[] = [
+  {
+    type: "function",
+    function: {
+      name: "log_expense",
+      description: "Record a new expense for the user.",
+      parameters: {
+        type: "object",
+        properties: {
+          amount: { type: "number" },
+          currency: { type: "string", description: "3-letter ISO code; default the user's primary currency" },
+          category_id: { type: "string", enum: [...CATEGORY_IDS] },
+          description: { type: "string" },
+          merchant: { type: "string" },
+          expense_date: { type: "string", description: "YYYY-MM-DD; default today" },
+        },
+        required: ["amount", "category_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "log_income",
+      description: "Record a new income entry for the user.",
+      parameters: {
+        type: "object",
+        properties: {
+          amount: { type: "number" },
+          currency: { type: "string", description: "3-letter ISO code; default the user's primary currency" },
+          category_id: { type: "string", enum: [...INCOME_CATEGORY_IDS] },
+          description: { type: "string" },
+          source_name: { type: "string", description: "employer, brokerage, tenant, etc." },
+          received_date: { type: "string", description: "YYYY-MM-DD; default today" },
+        },
+        required: ["amount", "category_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_budget",
+      description: "Create a budget the user can save toward for a future expense.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          type: { type: "string", enum: ["monthly_expenditure", "trip", "goal", "purchase", "custom"] },
+          target_amount: { type: "number" },
+          currency: { type: "string" },
+          end_date: { type: "string", description: "YYYY-MM-DD target date, optional" },
+        },
+        required: ["name", "type"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_report_summary",
+      description: "Get the user's income, expenses and savings totals (in their primary currency) for a date range.",
+      parameters: {
+        type: "object",
+        properties: {
+          from: { type: "string", description: "YYYY-MM-DD start; default start of this month" },
+          to: { type: "string", description: "YYYY-MM-DD end; optional" },
+        },
+      },
+    },
+  },
+];
+
+async function runPennyTool(name: string, args: any, db: SupabaseClient, userId: string) {
+  const primary = await getPrimaryCurrency(db, userId);
+
+  if (name === "log_expense") {
+    const currency = String(args.currency || primary).toUpperCase();
+    const { amountPrimary, fxRate } = await convertToPrimary(Number(args.amount), currency, primary);
+    const { data, error } = await db
+      .from("expenses")
+      .insert({
+        user_id: userId,
+        category_id: args.category_id,
+        amount: Number(args.amount),
+        currency,
+        amount_primary: amountPrimary,
+        fx_rate: fxRate,
+        description: args.description ?? null,
+        merchant: args.merchant ?? null,
+        expense_date: args.expense_date || new Date().toISOString().slice(0, 10),
+        source: "penny",
+      })
+      .select("id, amount, currency, category_id, expense_date")
+      .single();
+    if (error) return { result: { ok: false, error: error.message } };
+    return { result: { ok: true, expense: data }, action: { type: "expense_created", id: data.id } };
+  }
+
+  if (name === "log_income") {
+    const currency = String(args.currency || primary).toUpperCase();
+    const { amountPrimary, fxRate } = await convertToPrimary(Number(args.amount), currency, primary);
+    const { data, error } = await db
+      .from("incomes")
+      .insert({
+        user_id: userId,
+        category_id: args.category_id,
+        amount: Number(args.amount),
+        currency,
+        amount_primary: amountPrimary,
+        fx_rate: fxRate,
+        description: args.description ?? null,
+        source_name: args.source_name ?? null,
+        received_date: args.received_date || new Date().toISOString().slice(0, 10),
+        entry_source: "penny",
+      })
+      .select("id, amount, currency, category_id, received_date")
+      .single();
+    if (error) return { result: { ok: false, error: error.message } };
+    return { result: { ok: true, income: data }, action: { type: "income_created", id: data.id } };
+  }
+
+  if (name === "create_budget") {
+    const { data, error } = await db
+      .from("budgets")
+      .insert({
+        user_id: userId,
+        name: args.name,
+        type: args.type,
+        target_amount: args.target_amount ?? null,
+        currency: String(args.currency || primary).toUpperCase(),
+        end_date: args.end_date ?? null,
+      })
+      .select("id, name, type, target_amount, currency")
+      .single();
+    if (error) return { result: { ok: false, error: error.message } };
+    return { result: { ok: true, budget: data }, action: { type: "budget_created", id: data.id } };
+  }
+
+  if (name === "get_report_summary") {
+    const from = args.from || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+    let incQ = db.from("incomes").select("amount_primary, currency, amount, category_id").gte("received_date", from);
+    let expQ = db.from("expenses").select("amount_primary, currency, amount, category_id").gte("expense_date", from);
+    if (args.to) {
+      incQ = incQ.lte("received_date", args.to);
+      expQ = expQ.lte("expense_date", args.to);
+    }
+    const [{ data: inc }, { data: exp }] = await Promise.all([incQ, expQ]);
+    const val = (r: any) => (r.amount_primary != null ? Number(r.amount_primary) : r.currency === primary ? Number(r.amount) : 0);
+    const income = (inc ?? []).reduce((s, r) => s + val(r), 0);
+    const expenses = (exp ?? []).reduce((s, r) => s + val(r), 0);
+    return {
+      result: {
+        ok: true,
+        primaryCurrency: primary,
+        from,
+        to: args.to ?? null,
+        income,
+        expenses,
+        savings: income - expenses,
+        savingsRate: income > 0 ? (income - expenses) / income : 0,
+      },
+    };
+  }
+
+  return { result: { ok: false, error: `Unknown tool ${name}` } };
+}
+
+/** POST /api/ai/chat — { message } → { reply, actions }. Penny can answer and take actions. */
 aiRouter.post("/chat", async (req, res) => {
   const message = String(req.body?.message ?? "").trim();
   if (!message) return res.status(400).json({ error: "message is required" });
@@ -99,26 +277,56 @@ aiRouter.post("/chat", async (req, res) => {
     ]);
 
     const orderedHistory = (history ?? []).slice().reverse();
+    const today = new Date().toISOString().slice(0, 10);
 
-    const completion = await openai.chat.completions.create({
-      model: env.chatModel,
-      messages: [
-        { role: "system", content: PENNY_PERSONA },
-        { role: "system", content: `CONTEXT (JSON, last 60 days):\n${JSON.stringify(context)}` },
-        ...orderedHistory.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-        { role: "user", content: message },
-      ],
-      temperature: 0.6,
-    });
+    const messages: any[] = [
+      { role: "system", content: PENNY_PERSONA },
+      { role: "system", content: `Today is ${today}.\nCONTEXT (JSON, last 60 days):\n${JSON.stringify(context)}` },
+      ...orderedHistory.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+      { role: "user", content: message },
+    ];
 
-    const reply = completion.choices[0]?.message?.content ?? "Sorry, I couldn't come up with a reply just now.";
+    const actions: any[] = [];
+    let reply = "";
+
+    for (let step = 0; step < 5; step++) {
+      const completion = await openai.chat.completions.create({
+        model: env.chatModel,
+        messages,
+        tools: PENNY_TOOLS,
+        temperature: 0.5,
+      });
+      const msg = completion.choices[0]?.message;
+      if (!msg) break;
+
+      if (msg.tool_calls?.length) {
+        messages.push(msg);
+        for (const tc of msg.tool_calls) {
+          let parsedArgs: any = {};
+          try {
+            parsedArgs = JSON.parse(tc.function.arguments || "{}");
+          } catch {
+            /* leave empty */
+          }
+          const { result, action } = await runPennyTool(tc.function.name, parsedArgs, req.db, req.userId);
+          if (action) actions.push(action);
+          messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(result) });
+        }
+        continue; // let the model read tool results and respond
+      }
+
+      reply = msg.content ?? "";
+      break;
+    }
+
+    if (!reply) reply = "Done!";
 
     await req.db.from("chat_messages").insert([
       { user_id: req.userId, role: "user", content: message },
       { user_id: req.userId, role: "assistant", content: reply },
     ]);
 
-    res.json({ reply });
+    res.json({ reply, actions });
   } catch (err: any) {
     console.error("[ai/chat]", err);
     res.status(502).json({ error: "Penny is having trouble thinking right now. Try again in a moment." });
