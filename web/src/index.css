@@ -7,7 +7,10 @@
     font-family: "Nunito", sans-serif;
   }
   body {
-    @apply bg-cream text-forest-dark;
+    @apply bg-cream text-forest-dark transition-colors;
+  }
+  html.dark body {
+    @apply bg-night-950 text-night-ink;
   }
   h1, h2, h3, h4, .font-display {
     font-family: "Baloo 2", cursive;
@@ -22,4 +25,34 @@
     background-color: theme("colors.forest.light");
     border-radius: 999px;
   }
+}
+
+/* Branded range slider used by AmountSlider */
+.ww-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 999px;
+  background: theme("colors.forest.50");
+  outline: none;
+}
+.ww-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: theme("colors.gold.DEFAULT");
+  border: 3px solid #fff;
+  box-shadow: 0 2px 6px rgba(27, 67, 50, 0.25);
+  cursor: pointer;
+}
+.ww-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: theme("colors.gold.DEFAULT");
+  border: 3px solid #fff;
+  box-shadow: 0 2px 6px rgba(27, 67, 50, 0.25);
+  cursor: pointer;
 }

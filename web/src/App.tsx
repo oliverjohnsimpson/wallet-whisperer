@@ -3,8 +3,11 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
+import IncomePage from "@/pages/Income";
+import ExpensesPage from "@/pages/Expenses";
 import Budgets from "@/pages/Budgets";
 import BudgetDetail from "@/pages/BudgetDetail";
+import Pricing from "@/pages/Pricing";
 import Layout from "@/components/Layout";
 
 // Recharts pulls in a sizeable chunk — only pay for it when Reports is actually visited.
@@ -47,6 +50,22 @@ export default function App() {
         }
       />
       <Route
+        path="/income"
+        element={
+          <ProtectedRoute>
+            <IncomePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/expenses"
+        element={
+          <ProtectedRoute>
+            <ExpensesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/budgets"
         element={
           <ProtectedRoute>
@@ -69,6 +88,14 @@ export default function App() {
             <Suspense fallback={<PageFallback />}>
               <Reports />
             </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/pricing"
+        element={
+          <ProtectedRoute>
+            <Pricing />
           </ProtectedRoute>
         }
       />
