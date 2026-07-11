@@ -7,7 +7,10 @@
     font-family: "Nunito", sans-serif;
   }
   body {
-    @apply bg-cream text-forest-dark;
+    @apply bg-cream text-forest-dark transition-colors;
+  }
+  html.dark body {
+    @apply bg-night-950 text-night-ink;
   }
   h1, h2, h3, h4, .font-display {
     font-family: "Baloo 2", cursive;

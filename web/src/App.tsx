@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import IncomePage from "@/pages/Income";
+import ExpensesPage from "@/pages/Expenses";
 import Budgets from "@/pages/Budgets";
 import BudgetDetail from "@/pages/BudgetDetail";
 import Layout from "@/components/Layout";
@@ -52,6 +53,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <IncomePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/expenses"
+        element={
+          <ProtectedRoute>
+            <ExpensesPage />
           </ProtectedRoute>
         }
       />
