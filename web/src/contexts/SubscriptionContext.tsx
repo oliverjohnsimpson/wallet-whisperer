@@ -3,9 +3,15 @@ import { apiGet } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { type Feature, type Tier, hasFeature as tierHasFeature, normalizeTier } from "@/lib/entitlements";
 
+interface PaymentLinks {
+  standard: string | null;
+  professional: string | null;
+}
+
 interface SubscriptionContextValue {
   tier: Tier;
   razorpayKeyId: string | null;
+  paymentLinks: PaymentLinks;
   loading: boolean;
   has: (feature: Feature) => boolean;
   refresh: () => Promise<void>;
@@ -17,6 +23,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
   const [tier, setTier] = useState<Tier>("free");
   const [razorpayKeyId, setRazorpayKeyId] = useState<string | null>(null);
+  const [paymentLinks, setPaymentLinks] = useState<PaymentLinks>({ standard: null, professional: null });
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -29,6 +36,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       const data = await apiGet("/api/billing/status");
       setTier(normalizeTier(data?.tier));
       setRazorpayKeyId(data?.razorpayKeyId ?? null);
+      setPaymentLinks(data?.paymentLinks ?? { standard: null, professional: null });
     } catch {
       setTier("free");
     } finally {
@@ -42,7 +50,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   return (
     <SubscriptionContext.Provider
-      value={{ tier, razorpayKeyId, loading, has: (f) => tierHasFeature(tier, f), refresh }}
+      value={{ tier, razorpayKeyId, paymentLinks, loading, has: (f) => tierHasFeature(tier, f), refresh }}
     >
       {children}
     </SubscriptionContext.Provider>

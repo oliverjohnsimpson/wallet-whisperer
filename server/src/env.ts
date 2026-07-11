@@ -24,6 +24,10 @@ export const env = {
   razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET ?? "",
   razorpayPlanStandard: process.env.RAZORPAY_PLAN_STANDARD ?? "",
   razorpayPlanProfessional: process.env.RAZORPAY_PLAN_PROFESSIONAL ?? "",
+  // Hosted Razorpay payment-page links (simplest option; no API keys needed to
+  // collect payment, but tier activation is manual/webhook-based).
+  razorpayPaymentUrlStandard: process.env.RAZORPAY_PAYMENT_URL_STANDARD ?? "",
+  razorpayPaymentUrlProfessional: process.env.RAZORPAY_PAYMENT_URL_PROFESSIONAL ?? "",
 };
 
 export const razorpayConfigured = Boolean(env.razorpayKeyId && env.razorpayKeySecret);

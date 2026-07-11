@@ -27,7 +27,15 @@ billingRouter.get("/status", async (req, res) => {
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  res.json({ tier, subscription: sub ?? null, razorpayKeyId: env.razorpayKeyId || null });
+  res.json({
+    tier,
+    subscription: sub ?? null,
+    razorpayKeyId: env.razorpayKeyId || null,
+    paymentLinks: {
+      standard: env.razorpayPaymentUrlStandard || null,
+      professional: env.razorpayPaymentUrlProfessional || null,
+    },
+  });
 });
 
 /** POST /api/billing/create-subscription { tier } — starts a Razorpay subscription for checkout. */

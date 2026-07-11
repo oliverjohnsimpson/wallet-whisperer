@@ -5,7 +5,7 @@ import { PLANS, TIER_RANK, type Tier } from "@/lib/entitlements";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 
 export default function PlanCards({ compact = false }: { compact?: boolean }) {
-  const { tier: currentTier, refresh } = useSubscription();
+  const { tier: currentTier, razorpayKeyId, paymentLinks, refresh } = useSubscription();
   const [busy, setBusy] = useState<Tier | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
@@ -13,6 +13,17 @@ export default function PlanCards({ compact = false }: { compact?: boolean }) {
     if (tier === "free") return;
     setBusy(tier);
     setNote(null);
+
+    // If API-based subscriptions aren't configured but a hosted payment link is,
+    // send the user straight to the Razorpay payment page.
+    const link = tier === "professional" ? paymentLinks.professional : paymentLinks.standard;
+    if (!razorpayKeyId && link) {
+      window.open(link, "_blank", "noopener");
+      setNote("Opened the secure Razorpay payment page in a new tab. Your plan activates once payment is confirmed.");
+      setBusy(null);
+      return;
+    }
+
     try {
       const { subscriptionId, keyId } = await apiSend("POST", "/api/billing/create-subscription", { tier });
       const ok = await loadRazorpay();
