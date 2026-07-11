@@ -21,10 +21,22 @@ function errorMessage(body: any, status: number): string {
   return `Request failed (${status})`;
 }
 
+export interface ApiError extends Error {
+  status: number;
+  code?: string;
+  requiredTier?: string;
+}
+
 async function handle(res: Response) {
   if (res.status === 204) return null;
   const body = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(errorMessage(body, res.status));
+  if (!res.ok) {
+    const err = new Error(errorMessage(body, res.status)) as ApiError;
+    err.status = res.status;
+    if (body?.code) err.code = body.code;
+    if (body?.requiredTier) err.requiredTier = body.requiredTier;
+    throw err;
+  }
   return body;
 }
 

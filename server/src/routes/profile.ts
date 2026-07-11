@@ -11,7 +11,7 @@ profileRouter.use(requireAuth);
 profileRouter.get("/", async (req, res) => {
   const { data, error } = await req.db
     .from("profiles")
-    .select("id, display_name, avatar_url, default_currency, primary_currency")
+    .select("id, display_name, avatar_url, default_currency, primary_currency, subscription_tier")
     .eq("id", req.userId)
     .single();
   if (sendIfError(res, error, 404)) return;
@@ -32,7 +32,7 @@ profileRouter.patch("/", async (req, res) => {
     .from("profiles")
     .update(parsed.data)
     .eq("id", req.userId)
-    .select("id, display_name, avatar_url, default_currency, primary_currency")
+    .select("id, display_name, avatar_url, default_currency, primary_currency, subscription_tier")
     .single();
   if (sendIfError(res, error)) return;
   res.json(data);

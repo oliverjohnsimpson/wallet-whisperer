@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 import PennyWidget from "@/components/PennyWidget";
 
 const NAV_ITEMS = [
@@ -15,6 +16,7 @@ const NAV_ITEMS = [
 export default function Layout({ children }: { children: ReactNode }) {
   const { user, signOut } = useAuth();
   const { theme, toggle } = useTheme();
+  const { tier } = useSubscription();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("ww-sidebar-collapsed") === "1");
 
   useEffect(() => {
@@ -89,6 +91,19 @@ export default function Layout({ children }: { children: ReactNode }) {
         </div>
 
         <div className="space-y-2">
+          <NavLink
+            to="/pricing"
+            title={collapsed ? "Plans & upgrade" : undefined}
+            className={`flex items-center rounded-full font-semibold transition ${
+              tier === "free"
+                ? "bg-gold/90 text-forest-dark hover:bg-gold"
+                : "bg-forest text-cream hover:bg-forest-dark"
+            } ${collapsed ? "justify-center py-2.5" : "gap-2 px-4 py-2.5"}`}
+          >
+            <span className="text-lg">{tier === "free" ? "⭐" : "👑"}</span>
+            {!collapsed && (tier === "free" ? "Upgrade" : `${tier[0].toUpperCase()}${tier.slice(1)} plan`)}
+          </NavLink>
+
           <button
             onClick={toggle}
             aria-label="Toggle light/dark mode"

@@ -7,6 +7,7 @@ import IncomePage from "@/pages/Income";
 import ExpensesPage from "@/pages/Expenses";
 import Budgets from "@/pages/Budgets";
 import BudgetDetail from "@/pages/BudgetDetail";
+import Pricing from "@/pages/Pricing";
 import Layout from "@/components/Layout";
 
 // Recharts pulls in a sizeable chunk — only pay for it when Reports is actually visited.
@@ -87,6 +88,14 @@ export default function App() {
             <Suspense fallback={<PageFallback />}>
               <Reports />
             </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/pricing"
+        element={
+          <ProtectedRoute>
+            <Pricing />
           </ProtectedRoute>
         }
       />

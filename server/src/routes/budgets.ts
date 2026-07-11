@@ -2,6 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { requireAuth } from "../middleware/auth.js";
 import { sendIfError } from "../lib/respond.js";
+import { getTier } from "../lib/subscription.js";
+import { FREE_LIMITS } from "../lib/entitlements.js";
 
 export const budgetsRouter = Router();
 budgetsRouter.use(requireAuth);
@@ -43,6 +45,23 @@ budgetsRouter.get("/:id", async (req, res) => {
 budgetsRouter.post("/", async (req, res) => {
   const parsed = budgetInput.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  // Free tier is capped to a handful of active budgets.
+  const tier = await getTier(req.db, req.userId);
+  if (tier === "free") {
+    const { count } = await req.db
+      .from("budgets")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "active");
+    if ((count ?? 0) >= FREE_LIMITS.activeBudgets) {
+      return res.status(403).json({
+        error: `Free plan is limited to ${FREE_LIMITS.activeBudgets} active budgets. Upgrade for unlimited.`,
+        code: "upgrade_required",
+        requiredTier: "standard",
+        currentTier: tier,
+      });
+    }
+  }
 
   const { data, error } = await req.db
     .from("budgets")

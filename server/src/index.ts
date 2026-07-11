@@ -9,10 +9,15 @@ import { categoriesRouter, incomeCategoriesRouter } from "./routes/categories.js
 import { reportsRouter } from "./routes/reports.js";
 import { profileRouter } from "./routes/profile.js";
 import { aiRouter } from "./routes/ai.js";
+import { billingRouter, billingWebhookHandler } from "./routes/billing.js";
 
 const app = express();
 
 app.use(cors({ origin: env.webOrigin, credentials: true }));
+
+// Razorpay webhook needs the raw body for signature verification — mount before express.json().
+app.post("/api/billing/webhook", express.raw({ type: "*/*" }), billingWebhookHandler);
+
 app.use(express.json({ limit: "2mb" }));
 
 app.get("/api/health", (_req, res) => res.json({ ok: true, service: "wallet-whisperer-server" }));
@@ -24,6 +29,7 @@ app.use("/api/categories", categoriesRouter);
 app.use("/api/income-categories", incomeCategoriesRouter);
 app.use("/api/reports", reportsRouter);
 app.use("/api/profile", profileRouter);
+app.use("/api/billing", billingRouter);
 app.use("/api/ai", aiRouter);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

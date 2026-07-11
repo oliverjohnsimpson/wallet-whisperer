@@ -11,6 +11,8 @@ import { INCOME_CATEGORY_IDS } from "../incomeCategories.js";
 import { sendIfError } from "../lib/respond.js";
 import { getPrimaryCurrency } from "../lib/primaryCurrency.js";
 import { convertToPrimary } from "../lib/fx.js";
+import { getTier } from "../lib/subscription.js";
+import { FREE_LIMITS } from "../lib/entitlements.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const aiRouter = Router();
@@ -264,6 +266,26 @@ async function runPennyTool(name: string, args: any, db: SupabaseClient, userId:
 aiRouter.post("/chat", async (req, res) => {
   const message = String(req.body?.message ?? "").trim();
   if (!message) return res.status(400).json({ error: "message is required" });
+
+  // Free tier is capped on Penny messages per day.
+  const tier = await getTier(req.db, req.userId);
+  if (tier === "free") {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const { count } = await req.db
+      .from("chat_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "user")
+      .gte("created_at", startOfDay.toISOString());
+    if ((count ?? 0) >= FREE_LIMITS.pennyMessagesPerDay) {
+      return res.status(403).json({
+        error: `You've reached today's ${FREE_LIMITS.pennyMessagesPerDay}-message limit with Penny on the Free plan. Upgrade for unlimited chats.`,
+        code: "upgrade_required",
+        requiredTier: "standard",
+        currentTier: tier,
+      });
+    }
+  }
 
   try {
     const [context, { data: history }] = await Promise.all([
