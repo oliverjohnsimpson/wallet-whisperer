@@ -64,7 +64,9 @@ export default function CreateBudgetModal({
                 key={t}
                 onClick={() => setType(t)}
                 className={`rounded-lg border px-3 py-2 text-left text-sm font-semibold transition ${
-                  type === t ? "border-gold bg-gold/10 text-forest-dark" : "border-forest/15 text-forest-light"
+                  type === t
+                    ? "border-gold bg-gold/10 text-forest-dark dark:text-night-ink"
+                    : "border-forest/15 text-forest-light dark:border-white/15 dark:text-night-muted"
                 }`}
               >
                 {BUDGET_TYPE_META[t].icon} {BUDGET_TYPE_META[t].label}

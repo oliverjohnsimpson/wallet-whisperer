@@ -19,8 +19,10 @@ export default function Budgets() {
     <div className="p-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="font-display text-3xl font-extrabold text-forest-dark">Budgets</h1>
-          <p className="text-forest-light">Monthly spends, trips, goals, purchases — track it all in one place.</p>
+          <h1 className="font-display text-3xl font-extrabold text-forest-dark dark:text-night-ink">Budgets</h1>
+          <p className="text-forest-light dark:text-night-muted">
+            Monthly spends, trips, goals, purchases — track it all in one place.
+          </p>
         </div>
         <button
           onClick={() => setShowCreate(true)}
@@ -31,7 +33,7 @@ export default function Budgets() {
       </div>
 
       {!loading && budgets.length === 0 && (
-        <p className="rounded-xl2 bg-white p-8 text-center text-forest-light shadow-card">
+        <p className="rounded-xl2 bg-white p-8 text-center text-forest-light shadow-card dark:bg-night-card dark:text-night-muted">
           You haven't created any budgets yet. Try "Monthly Expenditure", "Goa Trip", "Emergency Fund Goal", or "New
           Laptop".
         </p>

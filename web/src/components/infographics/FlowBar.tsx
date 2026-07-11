@@ -25,20 +25,20 @@ export default function FlowBar({
     <div>
       <div className="mb-2 flex items-end justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-forest-light">Income</p>
-          <p className="font-display text-xl font-extrabold text-forest-dark">{formatMoney(income, currency)}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-forest-light dark:text-night-muted">Income</p>
+          <p className="font-display text-xl font-extrabold text-forest-dark dark:text-night-ink">{formatMoney(income, currency)}</p>
         </div>
         <div className="text-right">
-          <p className="text-xs font-semibold uppercase tracking-wide text-forest-light">
+          <p className="text-xs font-semibold uppercase tracking-wide text-forest-light dark:text-night-muted">
             {over ? "Overspent" : "Savings"}
           </p>
-          <p className={`font-display text-xl font-extrabold ${over ? "text-coral-dark" : "text-forest"}`}>
+          <p className={`font-display text-xl font-extrabold ${over ? "text-coral-dark dark:text-coral-light" : "text-forest dark:text-gold"}`}>
             {formatMoney(Math.abs(savings), currency)}
           </p>
         </div>
       </div>
 
-      <div className="flex h-6 w-full overflow-hidden rounded-full bg-forest-50">
+      <div className="flex h-6 w-full overflow-hidden rounded-full bg-forest-50 dark:bg-white/10">
         <div
           className="h-full bg-coral transition-all"
           style={{ width: `${expensePct}%` }}
@@ -51,7 +51,7 @@ export default function FlowBar({
         />
       </div>
 
-      <div className="mt-2 flex items-center gap-4 text-xs text-forest-light">
+      <div className="mt-2 flex items-center gap-4 text-xs text-forest-light dark:text-night-muted">
         <span className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full bg-coral" /> Expenses {formatMoney(expenses, currency)}
         </span>

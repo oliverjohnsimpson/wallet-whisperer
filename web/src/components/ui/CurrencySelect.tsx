@@ -15,8 +15,8 @@ export default function CurrencySelect({ value, onChange }: { value: string; onC
       renderOption={(c) => (
         <>
           <span className="w-8 shrink-0">{c.symbol}</span>
-          <span className="w-10 shrink-0 font-semibold text-forest-dark">{c.code}</span>
-          <span className="truncate text-forest-light">{c.name}</span>
+          <span className="w-10 shrink-0 font-semibold text-forest-dark dark:text-night-ink">{c.code}</span>
+          <span className="truncate text-forest-light dark:text-night-muted">{c.name}</span>
         </>
       )}
     />
