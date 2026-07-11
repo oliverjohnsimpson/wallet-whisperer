@@ -13,7 +13,7 @@ export default function MonthlyBars({
 }) {
   const data = months.slice(-count);
   if (data.length === 0) {
-    return <p className="py-8 text-center text-sm text-forest-light">No monthly data yet.</p>;
+    return <p className="py-8 text-center text-sm text-forest-light dark:text-night-muted">No monthly data yet.</p>;
   }
 
   const W = 720;
@@ -30,13 +30,13 @@ export default function MonthlyBars({
   const y = (v: number) => padTop + plotH - (v / max) * plotH;
 
   return (
-    <div className="w-full overflow-x-auto">
+    <div className="w-full overflow-x-auto text-forest-light dark:text-night-muted">
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[560px]" role="img" aria-label="Monthly income and expenses">
         {/* gridlines */}
         {[0, 0.25, 0.5, 0.75, 1].map((t) => (
           <g key={t}>
-            <line x1={padX} x2={W - padX} y1={y(max * t)} y2={y(max * t)} stroke="#e1e0d9" strokeWidth={1} />
-            <text x={4} y={y(max * t) + 4} fontSize={10} fill="#898781">
+            <line x1={padX} x2={W - padX} y1={y(max * t)} y2={y(max * t)} stroke="currentColor" strokeOpacity={0.2} strokeWidth={1} />
+            <text x={4} y={y(max * t) + 4} fontSize={10} fill="currentColor">
               {formatCompactMoney(max * t, currency)}
             </text>
           </g>
@@ -59,14 +59,14 @@ export default function MonthlyBars({
               <circle cx={cx} cy={savingsY} r={3.5} fill="#E8A33D" stroke="#fff" strokeWidth={1.5}>
                 <title>{`${formatMonthLabel(m.month, true)} · Savings ${formatMoney(m.savings, currency)}`}</title>
               </circle>
-              <text x={cx} y={H - 10} fontSize={11} fill="#52514e" textAnchor="middle">
+              <text x={cx} y={H - 10} fontSize={11} fill="currentColor" textAnchor="middle">
                 {formatMonthLabel(m.month)}
               </text>
             </g>
           );
         })}
       </svg>
-      <div className="mt-1 flex items-center gap-4 pl-9 text-xs text-forest-light">
+      <div className="mt-1 flex items-center gap-4 pl-9 text-xs text-forest-light dark:text-night-muted">
         <span className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-sm bg-forest" /> Income
         </span>

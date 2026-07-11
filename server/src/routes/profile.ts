@@ -39,20 +39,23 @@ profileRouter.patch("/", async (req, res) => {
 });
 
 /**
- * POST /api/profile/backfill-primary
- * One-shot repair: fills amount_primary/fx_rate on any income or expense row that
- * predates the primary-currency model (or whose primary currency later changed),
- * so historical entries are counted in the savings rollup. Safe to run repeatedly.
+ * POST /api/profile/backfill-primary   body: { recomputeAll?: boolean }
+ * Fills/refreshes amount_primary/fx_rate on income and expense rows so every
+ * entry is counted in the savings rollup in the user's primary currency.
+ *  - Default: only rows missing a conversion (amount_primary IS NULL).
+ *  - recomputeAll: every row — used after the dashboard's default currency
+ *    changes, since previously-stored conversions are now against the old
+ *    currency and would be stale. Safe to run repeatedly.
  */
 profileRouter.post("/backfill-primary", async (req, res) => {
+  const recomputeAll = req.body?.recomputeAll === true;
   const primary = await getPrimaryCurrency(req.db, req.userId);
   const result = { updated: 0, unconvertible: 0 };
 
   for (const table of ["incomes", "expenses"] as const) {
-    const { data: rows, error } = await req.db
-      .from(table)
-      .select("id, amount, currency")
-      .is("amount_primary", null);
+    let query = req.db.from(table).select("id, amount, currency");
+    if (!recomputeAll) query = query.is("amount_primary", null);
+    const { data: rows, error } = await query;
     if (sendIfError(res, error)) return;
 
     for (const r of rows ?? []) {

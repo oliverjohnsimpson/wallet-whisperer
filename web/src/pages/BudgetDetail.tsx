@@ -13,6 +13,7 @@ export default function BudgetDetail() {
   const [budget, setBudget] = useState<Budget | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState<Expense | null>(null);
   const [loading, setLoading] = useState(true);
   const requestIdRef = useRef(0);
 
@@ -44,8 +45,14 @@ export default function BudgetDetail() {
     navigate("/budgets");
   }
 
+  async function deleteExpense(expense: Expense) {
+    if (!confirm("Delete this expense? This can't be undone.")) return;
+    await apiSend("DELETE", `/api/expenses/${expense.id}`);
+    load();
+  }
+
   if (loading || !budget) {
-    return <div className="p-8 text-forest-light">Loading budget…</div>;
+    return <div className="p-8 text-forest-light dark:text-night-muted">Loading budget…</div>;
   }
 
   const { pct, over } = getBudgetProgress(budget);
@@ -56,28 +63,28 @@ export default function BudgetDetail() {
         ← Back to budgets
       </Link>
 
-      <div className="mb-8 flex flex-col items-start justify-between gap-4 rounded-xl2 bg-white p-6 shadow-card sm:flex-row sm:items-center">
+      <div className="mb-8 flex flex-col items-start justify-between gap-4 rounded-xl2 bg-white p-6 shadow-card dark:bg-night-card sm:flex-row sm:items-center">
         <div className="flex items-center gap-3">
           <span className="text-4xl">{budget.icon || BUDGET_TYPE_META[budget.type].icon}</span>
           <div>
-            <h1 className="font-display text-2xl font-extrabold text-forest-dark">{budget.name}</h1>
-            <p className="text-sm text-forest-light">
+            <h1 className="font-display text-2xl font-extrabold text-forest-dark dark:text-night-ink">{budget.name}</h1>
+            <p className="text-sm text-forest-light dark:text-night-muted">
               {BUDGET_TYPE_META[budget.type].label}
               {budget.end_date && <span> · 🎯 Target date: {formatDate(budget.end_date)}</span>}
             </p>
           </div>
         </div>
         <div className="text-right">
-          <p className="font-display text-3xl font-extrabold text-forest-dark">
+          <p className="font-display text-3xl font-extrabold text-forest-dark dark:text-night-ink">
             {formatMoney(budget.spent, budget.currency)}
             {budget.target_amount != null && (
-              <span className="ml-1 text-base font-semibold text-forest-light">
+              <span className="ml-1 text-base font-semibold text-forest-light dark:text-night-muted">
                 / {formatMoney(budget.target_amount, budget.currency)}
               </span>
             )}
           </p>
           {pct != null && (
-            <div className="mt-2 h-2 w-40 overflow-hidden rounded-full bg-forest-50">
+            <div className="mt-2 h-2 w-40 overflow-hidden rounded-full bg-forest-50 dark:bg-white/10">
               <div className={`h-full rounded-full ${over ? "bg-coral" : "bg-gold"}`} style={{ width: `${pct}%` }} />
             </div>
           )}
@@ -99,16 +106,34 @@ export default function BudgetDetail() {
         </button>
       </div>
 
-      <h2 className="mb-4 font-display text-xl font-bold text-forest-dark">Expenses</h2>
-      <div className="overflow-hidden rounded-xl2 bg-white shadow-card">
-        {expenses.length === 0 && <p className="p-6 text-center text-forest-light">No expenses logged against this budget yet.</p>}
+      <h2 className="mb-4 font-display text-xl font-bold text-forest-dark dark:text-night-ink">Expenses</h2>
+      <div className="overflow-hidden rounded-xl2 bg-white shadow-card dark:bg-night-card">
+        {expenses.length === 0 && <p className="p-6 text-center text-forest-light dark:text-night-muted">No expenses logged against this budget yet.</p>}
         {expenses.map((e) => (
-          <ExpenseRow key={e.id} expense={e} showMeta />
+          <ExpenseRow
+            key={e.id}
+            expense={e}
+            showMeta
+            onEdit={(exp) => {
+              setEditing(exp);
+              setShowModal(true);
+            }}
+            onDelete={deleteExpense}
+          />
         ))}
       </div>
 
       {showModal && (
-        <ExpenseModal defaultBudgetId={budget.id} onClose={() => setShowModal(false)} onCreated={handleExpenseCreated} />
+        <ExpenseModal
+          defaultBudgetId={budget.id}
+          defaultCurrency={budget.currency}
+          expense={editing ?? undefined}
+          onClose={() => {
+            setShowModal(false);
+            setEditing(null);
+          }}
+          onCreated={editing ? () => load() : handleExpenseCreated}
+        />
       )}
     </div>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { apiGet } from "@/lib/api";
+import { apiGet, apiSend } from "@/lib/api";
 import type { Expense, MonthlySummary } from "@/types";
 import { currentMonthStart, formatMoney } from "@/lib/format";
 import ExpenseRow from "@/components/ExpenseRow";
@@ -11,6 +11,7 @@ export default function ExpensesPage() {
   const [monthSummary, setMonthSummary] = useState<MonthlySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState<Expense | null>(null);
 
   async function load() {
     setLoading(true);
@@ -33,6 +34,12 @@ export default function ExpensesPage() {
     return () => window.removeEventListener("ww:data-changed", onChange);
   }, []);
 
+  async function handleDelete(expense: Expense) {
+    if (!confirm("Delete this expense? This can't be undone.")) return;
+    await apiSend("DELETE", `/api/expenses/${expense.id}`);
+    load();
+  }
+
   const currency = monthSummary?.primaryCurrency ?? "INR";
   const thisMonthTotal = monthSummary?.totals.expenses ?? 0;
   const txnCount = expenses.filter((e) => e.expense_date >= currentMonthStart()).length;
@@ -47,7 +54,10 @@ export default function ExpensesPage() {
           </p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={() => {
+            setEditing(null);
+            setShowModal(true);
+          }}
           className="rounded-full bg-coral px-5 py-2.5 font-semibold text-white shadow-card transition hover:bg-coral-dark"
         >
           + Add expense
@@ -85,11 +95,30 @@ export default function ExpensesPage() {
       )}
       <div className="overflow-hidden rounded-xl2 bg-white shadow-card dark:bg-night-card">
         {expenses.map((e) => (
-          <ExpenseRow key={e.id} expense={e} showMeta />
+          <ExpenseRow
+            key={e.id}
+            expense={e}
+            showMeta
+            onEdit={(exp) => {
+              setEditing(exp);
+              setShowModal(true);
+            }}
+            onDelete={handleDelete}
+          />
         ))}
       </div>
 
-      {showModal && <ExpenseModal onClose={() => setShowModal(false)} onCreated={() => load()} />}
+      {showModal && (
+        <ExpenseModal
+          defaultCurrency={currency}
+          expense={editing ?? undefined}
+          onClose={() => {
+            setShowModal(false);
+            setEditing(null);
+          }}
+          onCreated={() => load()}
+        />
+      )}
     </div>
   );
 }

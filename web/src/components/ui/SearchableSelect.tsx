@@ -92,8 +92,8 @@ export default function SearchableSelect<T>({
         className={inputClass}
       />
       {open && (
-        <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto scrollbar-thin rounded-lg border border-forest/15 bg-white shadow-soft">
-          {filtered.length === 0 && <li className="px-3 py-2 text-sm text-forest-light">{emptyLabel}</li>}
+        <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto scrollbar-thin rounded-lg border border-forest/15 bg-white text-forest-dark shadow-soft dark:border-white/15 dark:bg-night-800 dark:text-night-ink">
+          {filtered.length === 0 && <li className="px-3 py-2 text-sm text-forest-light dark:text-night-muted">{emptyLabel}</li>}
           {filtered.map((item, i) => (
             <li key={getValue(item)}>
               <button
@@ -101,7 +101,7 @@ export default function SearchableSelect<T>({
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => select(item)}
                 className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm ${
-                  i === highlight ? "bg-forest-50" : ""
+                  i === highlight ? "bg-forest-50 dark:bg-white/10" : ""
                 } ${getValue(item) === value ? "font-semibold" : ""}`}
               >
                 {renderOption(item)}

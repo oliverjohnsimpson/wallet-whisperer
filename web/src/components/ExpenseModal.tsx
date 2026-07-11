@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiGet, apiSend, apiUpload } from "@/lib/api";
-import type { Budget, Category, Expense, ExpenseDraft } from "@/types";
+import type { Budget, BudgetType, Category, Expense, ExpenseDraft } from "@/types";
+import { BUDGET_TYPE_META } from "@/types";
 import Modal from "@/components/ui/Modal";
 import { FormField, inputClass } from "@/components/ui/FormField";
 import CurrencySelect from "@/components/ui/CurrencySelect";
@@ -19,10 +20,10 @@ interface DraftState {
   budget_id: string;
 }
 
-function emptyDraft(defaultBudgetId?: string): DraftState {
+function emptyDraft(defaultBudgetId?: string, defaultCurrency = "INR"): DraftState {
   return {
     amount: "",
-    currency: "INR",
+    currency: defaultCurrency,
     category_id: "",
     merchant: "",
     description: "",
@@ -43,27 +44,57 @@ function fromAiDraft(d: ExpenseDraft, defaultBudgetId?: string): DraftState {
   };
 }
 
+function fromExpense(e: Expense): DraftState {
+  return {
+    amount: String(e.amount ?? ""),
+    currency: e.currency || "INR",
+    category_id: e.category_id || "",
+    merchant: e.merchant || "",
+    description: e.description || "",
+    expense_date: e.expense_date || new Date().toISOString().slice(0, 10),
+    budget_id: e.budget_id || "",
+  };
+}
+
 export default function ExpenseModal({
   defaultBudgetId,
+  defaultCurrency = "INR",
+  expense,
   onClose,
   onCreated,
 }: {
   defaultBudgetId?: string;
+  defaultCurrency?: string;
+  /** When provided, the modal edits this expense instead of creating a new one. */
+  expense?: Expense;
   onClose: () => void;
   onCreated: (expense: Expense) => void;
 }) {
+  const editing = !!expense;
   const [tab, setTab] = useState<Tab>("manual");
   const [categories, setCategories] = useState<Category[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
-  const [draft, setDraft] = useState<DraftState>(emptyDraft(defaultBudgetId));
-  const [source, setSource] = useState<"manual" | "voice" | "receipt">("manual");
-  const [rawInput, setRawInput] = useState<string | null>(null);
-  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [draft, setDraft] = useState<DraftState>(
+    expense ? fromExpense(expense) : emptyDraft(defaultBudgetId, defaultCurrency)
+  );
+  const [source, setSource] = useState<"manual" | "voice" | "receipt" | "penny">(
+    expense?.source ?? "manual"
+  );
+  const [rawInput, setRawInput] = useState<string | null>(expense?.raw_input ?? null);
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(expense?.receipt_url ?? null);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordingStarting, setRecordingStarting] = useState(false);
+
+  // Inline "create a new budget" flow, so a budget can be made without leaving
+  // the expense form. Triggered by the "+ New budget…" option in the dropdown.
+  const [creatingBudget, setCreatingBudget] = useState(false);
+  const [newBudgetName, setNewBudgetName] = useState("");
+  const [newBudgetType, setNewBudgetType] = useState<BudgetType>("monthly_expenditure");
+  const [newBudgetTarget, setNewBudgetTarget] = useState("");
+  const [budgetSaving, setBudgetSaving] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -148,11 +179,37 @@ export default function ExpenseModal({
     }
   }
 
+  async function createBudgetInline() {
+    if (!newBudgetName.trim()) return;
+    setBudgetSaving(true);
+    setAiError(null);
+    try {
+      const created: Budget = await apiSend("POST", "/api/budgets", {
+        name: newBudgetName.trim(),
+        type: newBudgetType,
+        currency: draft.currency,
+        target_amount: newBudgetTarget ? Number(newBudgetTarget) : null,
+        icon: BUDGET_TYPE_META[newBudgetType].icon,
+      });
+      // Add to the list and select it for the expense being entered.
+      setBudgets((prev) => [created, ...prev]);
+      setDraft((prev) => ({ ...prev, budget_id: created.id }));
+      setCreatingBudget(false);
+      setNewBudgetName("");
+      setNewBudgetTarget("");
+      setNewBudgetType("monthly_expenditure");
+    } catch (err: any) {
+      setAiError(err.message ?? "Couldn't create that budget.");
+    } finally {
+      setBudgetSaving(false);
+    }
+  }
+
   async function saveExpense(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     try {
-      const created = await apiSend("POST", "/api/expenses", {
+      const payload = {
         budget_id: draft.budget_id || null,
         category_id: draft.category_id,
         amount: Number(draft.amount),
@@ -163,8 +220,11 @@ export default function ExpenseModal({
         source,
         receipt_url: receiptUrl,
         raw_input: rawInput,
-      });
-      onCreated(created);
+      };
+      const saved = editing
+        ? await apiSend("PATCH", `/api/expenses/${expense!.id}`, payload)
+        : await apiSend("POST", "/api/expenses", payload);
+      onCreated(saved);
       onClose();
     } catch (err: any) {
       setAiError(err.message ?? "Couldn't save that expense.");
@@ -180,8 +240,9 @@ export default function ExpenseModal({
   ];
 
   return (
-    <Modal title="Add an expense" onClose={onClose} maxWidth="lg">
-      <div className="mb-5 flex gap-2 rounded-full bg-forest-50 p-1">
+    <Modal title={editing ? "Edit expense" : "Add an expense"} onClose={onClose} maxWidth="lg">
+      {!editing && (
+      <div className="mb-5 flex gap-2 rounded-full bg-forest-50 p-1 dark:bg-white/5">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -194,16 +255,17 @@ export default function ExpenseModal({
               setRawInput(null);
             }}
             className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${
-              tab === t.id ? "bg-forest text-cream shadow-card" : "text-forest-dark"
+              tab === t.id ? "bg-forest text-cream shadow-card" : "text-forest-dark dark:text-night-ink"
             }`}
           >
             {t.icon} {t.label}
           </button>
         ))}
       </div>
+      )}
 
         {tab === "voice" && (
-          <div className="mb-5 rounded-xl2 bg-forest-50 p-4 text-center">
+          <div className="mb-5 rounded-xl2 bg-forest-50 p-4 text-center dark:bg-white/5">
             {!recording ? (
               <button
                 onClick={startRecording}
@@ -220,13 +282,13 @@ export default function ExpenseModal({
                 ⏹ Stop recording
               </button>
             )}
-            {aiBusy && <p className="mt-2 text-sm text-forest-light">Penny is listening &amp; extracting details…</p>}
-            {rawInput && <p className="mt-3 text-xs italic text-forest-light">"{rawInput}"</p>}
+            {aiBusy && <p className="mt-2 text-sm text-forest-light dark:text-night-muted">Penny is listening &amp; extracting details…</p>}
+            {rawInput && <p className="mt-3 text-xs italic text-forest-light dark:text-night-muted">"{rawInput}"</p>}
           </div>
         )}
 
         {tab === "receipt" && (
-          <div className="mb-5 rounded-xl2 bg-forest-50 p-4 text-center">
+          <div className="mb-5 rounded-xl2 bg-forest-50 p-4 text-center dark:bg-white/5">
             <label className="inline-block cursor-pointer rounded-full bg-forest px-6 py-3 font-semibold text-cream shadow-card">
               📷 Upload receipt photo
               <input
@@ -236,7 +298,7 @@ export default function ExpenseModal({
                 onChange={(e) => e.target.files?.[0] && submitReceipt(e.target.files[0])}
               />
             </label>
-            {aiBusy && <p className="mt-2 text-sm text-forest-light">Penny is reading your receipt…</p>}
+            {aiBusy && <p className="mt-2 text-sm text-forest-light dark:text-night-muted">Penny is reading your receipt…</p>}
             {receiptUrl && <img src={receiptUrl} alt="Receipt preview" className="mx-auto mt-3 max-h-40 rounded-lg shadow-card" />}
           </div>
         )}
@@ -269,7 +331,7 @@ export default function ExpenseModal({
               renderOption={(c) => (
                 <>
                   <span className="w-6 shrink-0">{c.icon}</span>
-                  <span className="text-forest-dark">{c.label}</span>
+                  <span className="text-forest-dark dark:text-night-ink">{c.label}</span>
                 </>
               )}
             />
@@ -277,8 +339,16 @@ export default function ExpenseModal({
 
           <FormField label="Budget (optional)">
             <select
-              value={draft.budget_id}
-              onChange={(e) => setDraft({ ...draft, budget_id: e.target.value })}
+              value={creatingBudget ? "__new__" : draft.budget_id}
+              onChange={(e) => {
+                if (e.target.value === "__new__") {
+                  setCreatingBudget(true);
+                  setDraft({ ...draft, budget_id: "" });
+                } else {
+                  setCreatingBudget(false);
+                  setDraft({ ...draft, budget_id: e.target.value });
+                }
+              }}
               className={inputClass}
             >
               <option value="">No budget</option>
@@ -287,7 +357,63 @@ export default function ExpenseModal({
                   {b.icon} {b.name}
                 </option>
               ))}
+              <option value="__new__">➕ New budget…</option>
             </select>
+
+            {creatingBudget && (
+              <div className="mt-2 space-y-2 rounded-lg border border-forest/15 bg-forest-50 p-3 dark:border-white/10 dark:bg-white/5">
+                <input
+                  autoFocus
+                  value={newBudgetName}
+                  onChange={(e) => setNewBudgetName(e.target.value)}
+                  placeholder="New budget name (e.g. Goa trip)"
+                  className={inputClass}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    value={newBudgetType}
+                    onChange={(e) => setNewBudgetType(e.target.value as BudgetType)}
+                    className={inputClass}
+                  >
+                    {(Object.keys(BUDGET_TYPE_META) as BudgetType[]).map((t) => (
+                      <option key={t} value={t}>
+                        {BUDGET_TYPE_META[t].icon} {BUDGET_TYPE_META[t].label}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={newBudgetTarget}
+                    onChange={(e) => setNewBudgetTarget(e.target.value)}
+                    placeholder="Target (optional)"
+                    className={inputClass}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={createBudgetInline}
+                    disabled={budgetSaving || !newBudgetName.trim()}
+                    className="flex-1 rounded-full bg-forest py-2 text-sm font-semibold text-cream shadow-card disabled:opacity-60"
+                  >
+                    {budgetSaving ? "Creating…" : "Create & select"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCreatingBudget(false);
+                      setNewBudgetName("");
+                      setNewBudgetTarget("");
+                    }}
+                    className="rounded-full px-3 py-2 text-sm font-semibold text-forest-light hover:bg-forest-50 dark:text-night-muted dark:hover:bg-white/5"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </FormField>
 
           <div className="grid grid-cols-2 gap-3">
@@ -323,7 +449,7 @@ export default function ExpenseModal({
             disabled={saving || !draft.amount || !draft.category_id}
             className="w-full rounded-full bg-forest py-3 font-semibold text-cream shadow-card disabled:opacity-60"
           >
-            {saving ? "Saving…" : "Save expense"}
+            {saving ? "Saving…" : editing ? "Save changes" : "Save expense"}
           </button>
         </form>
     </Modal>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { apiGet } from "@/lib/api";
+import { apiGet, apiSend } from "@/lib/api";
 import type { Expense, Income, MonthlySummary } from "@/types";
 import { currentMonthStart, formatMoney } from "@/lib/format";
 import ExpenseModal from "@/components/ExpenseModal";
@@ -11,6 +11,7 @@ import SavingsGauge from "@/components/infographics/SavingsGauge";
 import FlowBar from "@/components/infographics/FlowBar";
 import CategoryBars from "@/components/infographics/CategoryBars";
 import MonthlyBars from "@/components/infographics/MonthlyBars";
+import DefaultCurrencyMenu from "@/components/DefaultCurrencyMenu";
 
 export default function Dashboard() {
   const [monthSummary, setMonthSummary] = useState<MonthlySummary | null>(null);
@@ -19,6 +20,8 @@ export default function Dashboard() {
   const [recentIncomes, setRecentIncomes] = useState<Income[]>([]);
   const [showExpense, setShowExpense] = useState(false);
   const [showIncome, setShowIncome] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [editingIncome, setEditingIncome] = useState<Income | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +52,18 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  async function deleteExpense(expense: Expense) {
+    if (!confirm("Delete this expense? This can't be undone.")) return;
+    await apiSend("DELETE", `/api/expenses/${expense.id}`);
+    loadAll();
+  }
+
+  async function deleteIncome(income: Income) {
+    if (!confirm("Delete this income entry? This can't be undone.")) return;
+    await apiSend("DELETE", `/api/incomes/${income.id}`);
+    loadAll();
+  }
+
   const currency = monthSummary?.primaryCurrency ?? "INR";
   const t = monthSummary?.totals ?? { income: 0, expenses: 0, savings: 0, savingsRate: 0 };
 
@@ -65,10 +80,11 @@ export default function Dashboard() {
     <div className="p-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-3xl font-extrabold text-forest-dark">Dashboard</h1>
-          <p className="text-forest-light">Your money for {monthLabel}, at a glance.</p>
+          <h1 className="font-display text-3xl font-extrabold text-forest-dark dark:text-night-ink">Dashboard</h1>
+          <p className="text-forest-light dark:text-night-muted">Your money for {monthLabel}, at a glance.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <DefaultCurrencyMenu value={currency} onChanged={() => loadAll()} />
           <button
             onClick={() => setShowIncome(true)}
             className="rounded-full bg-gold px-5 py-2.5 font-semibold text-forest-dark shadow-card transition hover:bg-gold-light"
@@ -95,8 +111,8 @@ export default function Dashboard() {
 
       {/* Hero: this month's income -> expenses -> savings */}
       <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="rounded-xl2 bg-white p-6 shadow-card lg:col-span-2">
-          <h2 className="mb-4 font-display text-lg font-bold text-forest-dark">This month's flow</h2>
+        <div className="rounded-xl2 bg-white p-6 shadow-card dark:bg-night-card lg:col-span-2">
+          <h2 className="mb-4 font-display text-lg font-bold text-forest-dark dark:text-night-ink">This month's flow</h2>
           <FlowBar income={t.income} expenses={t.expenses} currency={currency} />
         </div>
         <div className="flex flex-col items-center justify-center rounded-xl2 bg-forest p-6 text-cream shadow-soft">
@@ -122,16 +138,16 @@ export default function Dashboard() {
 
       {/* Category infographics */}
       <div className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="rounded-xl2 bg-white p-6 shadow-card">
-          <h2 className="mb-4 font-display text-lg font-bold text-forest-dark">Where income came from</h2>
+        <div className="rounded-xl2 bg-white p-6 shadow-card dark:bg-night-card">
+          <h2 className="mb-4 font-display text-lg font-bold text-forest-dark dark:text-night-ink">Where income came from</h2>
           <CategoryBars
             items={monthSummary?.byIncomeCategory ?? []}
             currency={currency}
             emptyLabel="No income logged this month yet."
           />
         </div>
-        <div className="rounded-xl2 bg-white p-6 shadow-card">
-          <h2 className="mb-4 font-display text-lg font-bold text-forest-dark">Where money went</h2>
+        <div className="rounded-xl2 bg-white p-6 shadow-card dark:bg-night-card">
+          <h2 className="mb-4 font-display text-lg font-bold text-forest-dark dark:text-night-ink">Where money went</h2>
           <CategoryBars
             items={monthSummary?.byExpenseCategory ?? []}
             currency={currency}
@@ -141,9 +157,9 @@ export default function Dashboard() {
       </div>
 
       {/* Savings trend */}
-      <div className="mb-8 rounded-xl2 bg-white p-6 shadow-card">
+      <div className="mb-8 rounded-xl2 bg-white p-6 shadow-card dark:bg-night-card">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-display text-lg font-bold text-forest-dark">Income vs. expenses over time</h2>
+          <h2 className="font-display text-lg font-bold text-forest-dark dark:text-night-ink">Income vs. expenses over time</h2>
           <Link to="/reports" className="text-sm font-semibold text-coral hover:underline">
             Full reports →
           </Link>
@@ -152,23 +168,51 @@ export default function Dashboard() {
       </div>
 
       {/* Recent activity */}
-      <h2 className="mb-4 font-display text-xl font-bold text-forest-dark">Recent activity</h2>
-      <div className="overflow-hidden rounded-xl2 bg-white shadow-card">
+      <h2 className="mb-4 font-display text-xl font-bold text-forest-dark dark:text-night-ink">Recent activity</h2>
+      <div className="overflow-hidden rounded-xl2 bg-white shadow-card dark:bg-night-card">
         {!loading && recentActivity.length === 0 && (
-          <p className="p-6 text-center text-forest-light">Nothing logged yet — add some income or an expense.</p>
+          <p className="p-6 text-center text-forest-light dark:text-night-muted">Nothing logged yet — add some income or an expense.</p>
         )}
         {recentActivity.map((a) =>
           a.kind === "income" ? (
-            <IncomeRow key={`i-${a.income.id}`} income={a.income} />
+            <IncomeRow
+              key={`i-${a.income.id}`}
+              income={a.income}
+              onEdit={(inc) => setEditingIncome(inc)}
+              onDelete={deleteIncome}
+            />
           ) : (
-            <ExpenseRow key={`e-${a.expense.id}`} expense={a.expense} />
+            <ExpenseRow
+              key={`e-${a.expense.id}`}
+              expense={a.expense}
+              onEdit={(exp) => setEditingExpense(exp)}
+              onDelete={deleteExpense}
+            />
           )
         )}
       </div>
 
-      {showExpense && <ExpenseModal onClose={() => setShowExpense(false)} onCreated={() => loadAll()} />}
-      {showIncome && (
-        <IncomeModal defaultCurrency={currency} onClose={() => setShowIncome(false)} onCreated={() => loadAll()} />
+      {(showExpense || editingExpense) && (
+        <ExpenseModal
+          defaultCurrency={currency}
+          expense={editingExpense ?? undefined}
+          onClose={() => {
+            setShowExpense(false);
+            setEditingExpense(null);
+          }}
+          onCreated={() => loadAll()}
+        />
+      )}
+      {(showIncome || editingIncome) && (
+        <IncomeModal
+          defaultCurrency={currency}
+          income={editingIncome ?? undefined}
+          onClose={() => {
+            setShowIncome(false);
+            setEditingIncome(null);
+          }}
+          onCreated={() => loadAll()}
+        />
       )}
     </div>
   );
@@ -177,11 +221,11 @@ export default function Dashboard() {
 function StatTile({ label, value, tone }: { label: string; value: string; tone: "income" | "expense" | "savings" | "over" }) {
   const styles: Record<string, string> = {
     income: "bg-forest text-cream",
-    expense: "bg-white text-forest-dark shadow-card",
-    savings: "bg-gold/15 text-forest-dark shadow-card",
-    over: "bg-coral/15 text-coral-dark shadow-card",
+    expense: "bg-white text-forest-dark shadow-card dark:bg-night-card dark:text-night-ink",
+    savings: "bg-gold/15 text-forest-dark shadow-card dark:bg-gold/10 dark:text-night-ink",
+    over: "bg-coral/15 text-coral-dark shadow-card dark:bg-coral/10 dark:text-coral-light",
   };
-  const labelColor = tone === "income" ? "text-cream/70" : "text-forest-light";
+  const labelColor = tone === "income" ? "text-cream/70" : "text-forest-light dark:text-night-muted";
   return (
     <div className={`rounded-xl2 p-5 ${styles[tone]}`}>
       <p className={`text-xs font-semibold uppercase tracking-wide ${labelColor}`}>{label}</p>

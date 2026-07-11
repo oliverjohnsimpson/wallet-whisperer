@@ -84,8 +84,8 @@ export default function Reports() {
   return (
     <div className="p-8">
       <div className="mb-6">
-        <h1 className="font-display text-3xl font-extrabold text-forest-dark">Reports</h1>
-        <p className="text-forest-light">Income, expenses, and savings — sliced any way you like.</p>
+        <h1 className="font-display text-3xl font-extrabold text-forest-dark dark:text-night-ink">Reports</h1>
+        <p className="text-forest-light dark:text-night-muted">Income, expenses, and savings — sliced any way you like.</p>
       </div>
 
       <div className="mb-6 flex flex-wrap items-center gap-2">
@@ -94,7 +94,9 @@ export default function Reports() {
             key={p.id}
             onClick={() => setPreset(p.id)}
             className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${
-              preset === p.id ? "bg-forest text-cream shadow-card" : "bg-white text-forest-dark shadow-card"
+              preset === p.id
+                ? "bg-forest text-cream shadow-card"
+                : "bg-white text-forest-dark shadow-card dark:bg-night-card dark:text-night-ink"
             }`}
           >
             {p.label}
@@ -102,7 +104,7 @@ export default function Reports() {
         ))}
       </div>
 
-      {loading && <p className="text-forest-light">Crunching the numbers…</p>}
+      {loading && <p className="text-forest-light dark:text-night-muted">Crunching the numbers…</p>}
 
       {error && (
         <div className="rounded-xl2 bg-coral/10 p-4 text-sm text-coral-dark">{error}</div>
@@ -112,37 +114,37 @@ export default function Reports() {
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <Tile label="Income" value={fmt(t.income)} className="bg-forest text-cream" muted="text-cream/70" />
-            <Tile label="Expenses" value={fmt(t.expenses)} className="bg-white text-forest-dark shadow-card" />
+            <Tile label="Expenses" value={fmt(t.expenses)} className="bg-white text-forest-dark shadow-card dark:bg-night-card dark:text-night-ink" />
             <Tile
               label={t.savings >= 0 ? "Savings" : "Overspent"}
               value={fmt(Math.abs(t.savings))}
-              className="bg-gold/15 text-forest-dark shadow-card"
+              className="bg-gold/15 text-forest-dark shadow-card dark:bg-gold/10 dark:text-night-ink"
             />
             <Tile
               label="Savings rate"
               value={`${Math.round(t.savingsRate * 100)}%`}
-              className="bg-white text-forest-dark shadow-card"
+              className="bg-white text-forest-dark shadow-card dark:bg-night-card dark:text-night-ink"
             />
           </div>
 
           {/* 3D showcase */}
-          <div className="rounded-xl2 bg-white p-6 shadow-card">
+          <div className="rounded-xl2 bg-white p-6 shadow-card dark:bg-night-card">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-display text-lg font-bold text-forest-dark">Income vs. expenses in 3D</h2>
-              <span className="text-xs text-forest-light">🖱️ drag to spin · scroll to zoom</span>
+              <h2 className="font-display text-lg font-bold text-forest-dark dark:text-night-ink">Income vs. expenses in 3D</h2>
+              <span className="text-xs text-forest-light dark:text-night-muted">🖱️ drag to spin · scroll to zoom</span>
             </div>
             <Suspense
-              fallback={<div className="flex h-80 items-center justify-center rounded-xl2 bg-forest-50 text-forest-light">Loading 3D view…</div>}
+              fallback={<div className="flex h-80 items-center justify-center rounded-xl2 bg-forest-50 text-forest-light dark:bg-white/5 dark:text-night-muted">Loading 3D view…</div>}
             >
               <SavingsBars3D months={summary.months} currency={currency} />
             </Suspense>
           </div>
 
           {/* Interactive composed chart */}
-          <div className="rounded-xl2 bg-white p-6 shadow-card">
-            <h2 className="mb-4 font-display text-lg font-bold text-forest-dark">Monthly income, expenses &amp; savings</h2>
+          <div className="rounded-xl2 bg-white p-6 shadow-card dark:bg-night-card">
+            <h2 className="mb-4 font-display text-lg font-bold text-forest-dark dark:text-night-ink">Monthly income, expenses &amp; savings</h2>
             {monthData.length === 0 ? (
-              <p className="text-forest-light">No data in this range yet.</p>
+              <p className="text-forest-light dark:text-night-muted">No data in this range yet.</p>
             ) : (
               <ResponsiveContainer width="100%" height={320}>
                 <ComposedChart data={monthData} margin={{ left: 8, right: 16 }}>
@@ -172,7 +174,7 @@ export default function Reports() {
           </div>
 
           {(summary.unconverted.incomes > 0 || summary.unconverted.expenses > 0) && (
-            <p className="rounded-lg bg-gold/10 p-3 text-xs text-forest-light">
+            <p className="rounded-lg bg-gold/10 p-3 text-xs text-forest-light dark:text-night-muted">
               Note: {summary.unconverted.incomes + summary.unconverted.expenses} entr
               {summary.unconverted.incomes + summary.unconverted.expenses === 1 ? "y" : "ies"} in a currency we couldn't
               convert to {currency} were left out of these totals.
@@ -192,7 +194,7 @@ function pieData(items: { category_id: string; label: string; icon: string; colo
   return top;
 }
 
-function Tile({ label, value, className, muted = "text-forest-light" }: { label: string; value: string; className: string; muted?: string }) {
+function Tile({ label, value, className, muted = "text-forest-light dark:text-night-muted" }: { label: string; value: string; className: string; muted?: string }) {
   return (
     <div className={`rounded-xl2 p-5 ${className}`}>
       <p className={`text-xs font-semibold uppercase tracking-wide ${muted}`}>{label}</p>
@@ -213,10 +215,10 @@ function DonutCard({
   emptyLabel: string;
 }) {
   return (
-    <div className="rounded-xl2 bg-white p-6 shadow-card">
-      <h2 className="mb-4 font-display text-lg font-bold text-forest-dark">{title}</h2>
+    <div className="rounded-xl2 bg-white p-6 shadow-card dark:bg-night-card">
+      <h2 className="mb-4 font-display text-lg font-bold text-forest-dark dark:text-night-ink">{title}</h2>
       {data.length === 0 ? (
-        <p className="py-8 text-center text-forest-light">{emptyLabel}</p>
+        <p className="py-8 text-center text-forest-light dark:text-night-muted">{emptyLabel}</p>
       ) : (
         <ResponsiveContainer width="100%" height={280}>
           <PieChart>

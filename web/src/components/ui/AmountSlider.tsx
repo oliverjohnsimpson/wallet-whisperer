@@ -42,7 +42,7 @@ export default function AmountSlider({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-3">
-        <span className="shrink-0 text-lg font-semibold text-forest-light">{symbol}</span>
+        <span className="shrink-0 text-lg font-semibold text-forest-light dark:text-night-muted">{symbol}</span>
         <input
           required
           type="number"
@@ -70,7 +70,7 @@ export default function AmountSlider({
             key={c}
             type="button"
             onClick={() => setTyped(String(Math.round((numeric + c) * 100) / 100))}
-            className="rounded-full bg-forest-50 px-2.5 py-1 text-xs font-semibold text-forest-dark transition hover:bg-gold/20"
+            className="rounded-full bg-forest-50 px-2.5 py-1 text-xs font-semibold text-forest-dark transition hover:bg-gold/20 dark:bg-white/10 dark:text-night-ink dark:hover:bg-gold/20"
           >
             +{symbol}
             {c.toLocaleString("en-IN")}

@@ -40,21 +40,40 @@ function fromAiDraft(d: IncomeDraft): DraftState {
   };
 }
 
+function fromIncome(i: Income): DraftState {
+  return {
+    amount: String(i.amount ?? ""),
+    currency: i.currency || "INR",
+    category_id: i.category_id || "",
+    source_name: i.source_name || "",
+    description: i.description || "",
+    received_date: i.received_date || new Date().toISOString().slice(0, 10),
+  };
+}
+
 export default function IncomeModal({
   onClose,
   onCreated,
   defaultCurrency = "INR",
+  income,
 }: {
   onClose: () => void;
   onCreated: (income: Income) => void;
   defaultCurrency?: string;
+  /** When provided, the modal edits this income instead of creating a new one. */
+  income?: Income;
 }) {
+  const editing = !!income;
   const [tab, setTab] = useState<Tab>("manual");
   const [categories, setCategories] = useState<Category[]>([]);
-  const [draft, setDraft] = useState<DraftState>({ ...emptyDraft(), currency: defaultCurrency });
-  const [entrySource, setEntrySource] = useState<"manual" | "voice" | "receipt" | "penny">("manual");
-  const [rawInput, setRawInput] = useState<string | null>(null);
-  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [draft, setDraft] = useState<DraftState>(
+    income ? fromIncome(income) : { ...emptyDraft(), currency: defaultCurrency }
+  );
+  const [entrySource, setEntrySource] = useState<"manual" | "voice" | "receipt" | "penny">(
+    income?.entry_source === "email" || income?.entry_source === "sms" ? "manual" : income?.entry_source ?? "manual"
+  );
+  const [rawInput, setRawInput] = useState<string | null>(income?.raw_input ?? null);
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(income?.receipt_url ?? null);
   const [pasteText, setPasteText] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -163,7 +182,7 @@ export default function IncomeModal({
     e.preventDefault();
     setSaving(true);
     try {
-      const created = await apiSend("POST", "/api/incomes", {
+      const payload = {
         category_id: draft.category_id,
         amount: Number(draft.amount),
         currency: draft.currency,
@@ -173,8 +192,11 @@ export default function IncomeModal({
         entry_source: entrySource,
         receipt_url: receiptUrl,
         raw_input: rawInput,
-      });
-      onCreated(created);
+      };
+      const saved = editing
+        ? await apiSend("PATCH", `/api/incomes/${income!.id}`, payload)
+        : await apiSend("POST", "/api/incomes", payload);
+      onCreated(saved);
       onClose();
     } catch (err: any) {
       setAiError(err.message ?? "Couldn't save that income.");
@@ -191,8 +213,9 @@ export default function IncomeModal({
   ];
 
   return (
-    <Modal title="Add income" onClose={onClose} maxWidth="lg">
-      <div className="mb-5 flex gap-2 rounded-full bg-forest-50 p-1">
+    <Modal title={editing ? "Edit income" : "Add income"} onClose={onClose} maxWidth="lg">
+      {!editing && (
+      <div className="mb-5 flex gap-2 rounded-full bg-forest-50 p-1 dark:bg-white/5">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -205,16 +228,17 @@ export default function IncomeModal({
               setRawInput(null);
             }}
             className={`flex-1 rounded-full py-2 text-xs font-semibold transition sm:text-sm ${
-              tab === t.id ? "bg-forest text-cream shadow-card" : "text-forest-dark"
+              tab === t.id ? "bg-forest text-cream shadow-card" : "text-forest-dark dark:text-night-ink"
             }`}
           >
             {t.icon} {t.label}
           </button>
         ))}
       </div>
+      )}
 
       {tab === "voice" && (
-        <div className="mb-5 rounded-xl2 bg-forest-50 p-4 text-center">
+        <div className="mb-5 rounded-xl2 bg-forest-50 p-4 text-center dark:bg-white/5">
           {!recording ? (
             <button
               onClick={startRecording}
@@ -231,14 +255,14 @@ export default function IncomeModal({
               ⏹ Stop recording
             </button>
           )}
-          <p className="mt-2 text-xs text-forest-light">e.g. "Got my salary of 85,000 from Acme on the 1st"</p>
-          {aiBusy && <p className="mt-2 text-sm text-forest-light">Penny is listening &amp; extracting…</p>}
-          {rawInput && <p className="mt-3 text-xs italic text-forest-light">"{rawInput}"</p>}
+          <p className="mt-2 text-xs text-forest-light dark:text-night-muted">e.g. "Got my salary of 85,000 from Acme on the 1st"</p>
+          {aiBusy && <p className="mt-2 text-sm text-forest-light dark:text-night-muted">Penny is listening &amp; extracting…</p>}
+          {rawInput && <p className="mt-3 text-xs italic text-forest-light dark:text-night-muted">"{rawInput}"</p>}
         </div>
       )}
 
       {tab === "receipt" && (
-        <div className="mb-5 rounded-xl2 bg-forest-50 p-4 text-center">
+        <div className="mb-5 rounded-xl2 bg-forest-50 p-4 text-center dark:bg-white/5">
           <label className="inline-block cursor-pointer rounded-full bg-forest px-6 py-3 font-semibold text-cream shadow-card">
             📷 Upload payslip / dividend note
             <input
@@ -248,13 +272,13 @@ export default function IncomeModal({
               onChange={(e) => e.target.files?.[0] && submitReceipt(e.target.files[0])}
             />
           </label>
-          {aiBusy && <p className="mt-2 text-sm text-forest-light">Penny is reading your document…</p>}
+          {aiBusy && <p className="mt-2 text-sm text-forest-light dark:text-night-muted">Penny is reading your document…</p>}
           {receiptUrl && <img src={receiptUrl} alt="Preview" className="mx-auto mt-3 max-h-40 rounded-lg shadow-card" />}
         </div>
       )}
 
       {tab === "paste" && (
-        <div className="mb-5 rounded-xl2 bg-forest-50 p-4">
+        <div className="mb-5 rounded-xl2 bg-forest-50 p-4 dark:bg-white/5">
           <textarea
             value={pasteText}
             onChange={(e) => setPasteText(e.target.value)}
@@ -297,7 +321,7 @@ export default function IncomeModal({
             renderOption={(c) => (
               <>
                 <span className="w-6 shrink-0">{c.icon}</span>
-                <span className="text-forest-dark">{c.label}</span>
+                <span className="text-forest-dark dark:text-night-ink">{c.label}</span>
               </>
             )}
           />
@@ -337,7 +361,7 @@ export default function IncomeModal({
           disabled={saving || !draft.amount || !draft.category_id}
           className="w-full rounded-full bg-gold py-3 font-semibold text-forest-dark shadow-card transition hover:bg-gold-light disabled:opacity-60"
         >
-          {saving ? "Saving…" : "Save income"}
+          {saving ? "Saving…" : editing ? "Save changes" : "Save income"}
         </button>
       </form>
     </Modal>
