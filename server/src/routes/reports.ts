@@ -76,6 +76,86 @@ interface CatBucket {
   total: number;
 }
 
+/** Inclusive list of "YYYY-MM" keys spanning [from, to]. */
+function monthKeys(from: string, to: string): string[] {
+  const [fy, fm] = from.slice(0, 7).split("-").map(Number);
+  const [ty, tm] = to.slice(0, 7).split("-").map(Number);
+  const keys: string[] = [];
+  let y = fy;
+  let m = fm;
+  for (let i = 0; i < 600 && (y < ty || (y === ty && m <= tm)); i++) {
+    keys.push(`${y}-${String(m).padStart(2, "0")}`);
+    if (++m > 12) {
+      m = 1;
+      y++;
+    }
+  }
+  return keys;
+}
+
+/**
+ * GET /api/reports/category-trends?from=&to=
+ * Per-month totals for each income category and each expense category, in the
+ * user's primary currency. Powers the Reports line graphs (income sources &
+ * expense categories over time).
+ */
+reportsRouter.get("/category-trends", async (req, res) => {
+  const primary = await getPrimaryCurrency(req.db, req.userId);
+
+  const now = new Date();
+  const defaultFrom = new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString().slice(0, 10);
+  const from = req.query.from ? String(req.query.from) : defaultFrom;
+  const to = req.query.to ? String(req.query.to) : now.toISOString().slice(0, 10);
+
+  let incomeQuery = req.db
+    .from("incomes")
+    .select("amount, amount_primary, currency, received_date, category_id, income_categories(label, icon, color)")
+    .gte("received_date", from)
+    .lte("received_date", to);
+  let expenseQuery = req.db
+    .from("expenses")
+    .select("amount, amount_primary, currency, expense_date, category_id, categories(label, icon, color)")
+    .gte("expense_date", from)
+    .lte("expense_date", to);
+
+  const [{ data: incomes, error: incErr }, { data: expenses, error: expErr }] = await Promise.all([
+    incomeQuery,
+    expenseQuery,
+  ]);
+  if (sendIfError(res, incErr)) return;
+  if (sendIfError(res, expErr)) return;
+
+  const months = monthKeys(from, to);
+  const monthIndex = new Map(months.map((m, i) => [m, i]));
+
+  function build(rows: any[], dateField: string, catRel: string) {
+    // key -> { label, color, values[] }
+    const series = new Map<string, { key: string; label: string; color: string; values: number[] }>();
+    for (const r of rows) {
+      const val = primaryValue(r, primary);
+      if (val == null) continue;
+      const idx = monthIndex.get(String(r[dateField]).slice(0, 7));
+      if (idx == null) continue;
+      const rel = r[catRel];
+      const key = r.category_id;
+      let s = series.get(key);
+      if (!s) {
+        s = { key, label: rel?.label ?? key, color: rel?.color ?? "#7A7A7A", values: months.map(() => 0) };
+        series.set(key, s);
+      }
+      s.values[idx] += val;
+    }
+    return [...series.values()].sort((a, b) => b.values.reduce((x, y) => x + y, 0) - a.values.reduce((x, y) => x + y, 0));
+  }
+
+  res.json({
+    primaryCurrency: primary,
+    months,
+    income: build((incomes ?? []) as any[], "received_date", "income_categories"),
+    expenses: build((expenses ?? []) as any[], "expense_date", "categories"),
+  });
+});
+
 /**
  * GET /api/reports/monthly-summary?from=&to=
  * The income -> expenses -> savings rollup, all in the user's primary currency.
