@@ -2,16 +2,14 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import FinanceBackground from "@/components/FinanceBackground";
 
-/** Gmail logo (multicolour envelope). Decorative — brand identity only. */
-function GmailIcon({ className = "h-5 w-5" }: { className?: string }) {
+/** Google "G" logo (four-colour). Decorative — brand identity only. */
+function GoogleIcon({ className = "h-5 w-5" }: { className?: string }) {
   return (
     <svg viewBox="0 0 48 48" className={className} aria-hidden focusable="false">
-      <path fill="#4285F4" d="M45 16.2V38a3 3 0 0 1-3 3h-4V21.49L24 31.29 10 21.49V41H6a3 3 0 0 1-3-3V16.2l1.5-1.05L24 28.6l19.5-13.45z" />
-      <path fill="#34A853" d="M10 41V21.49L24 31.29V41z" />
-      <path fill="#FBBC04" d="M3 16.2V38a3 3 0 0 0 3 3h4V21.49L4.5 15.15z" />
-      <path fill="#EA4335" d="M10 8.6 24 18.4 38 8.6l4.02-.05C43.66 8.55 45 9.9 45 11.55V16.2L24 30.6 3 16.2v-4.65C3 9.9 4.34 8.55 5.98 8.55z" />
-      <path fill="#C5221F" d="M3 16.2v-4.65C3 9.9 4.34 8.55 5.98 8.55L10 8.6v12.89z" />
-      <path fill="#C5221F" d="M45 16.2v-4.65c0-1.65-1.34-3-2.98-3L38 8.6v12.89z" />
+      <path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z" />
+      <path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7A21.99 21.99 0 0 0 24 46z" />
+      <path fill="#FBBC05" d="M11.69 28.18a13.2 13.2 0 0 1 0-8.36v-5.7H4.34a22 22 0 0 0 0 19.76l7.35-5.7z" />
+      <path fill="#EA4335" d="M24 9.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 3.02 29.93 1 24 1 15.4 1 7.96 5.94 4.34 13.12l7.35 5.7C13.42 13.62 18.27 9.75 24 9.75z" />
     </svg>
   );
 }
@@ -99,7 +97,7 @@ export default function Login() {
             onClick={() => signInWithProvider("google")}
             className="flex w-full items-center justify-center gap-2 rounded-full border border-forest/15 bg-white px-4 py-2.5 font-semibold text-forest-dark shadow-card transition hover:shadow-soft"
           >
-            <GmailIcon /> Sign-in with Google
+            <GoogleIcon /> Sign-in with Google
           </button>
           <button
             onClick={() => signInWithProvider("azure")}

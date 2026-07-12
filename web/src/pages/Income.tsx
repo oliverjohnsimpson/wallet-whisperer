@@ -10,11 +10,12 @@ import {
   YAxis,
 } from "recharts";
 import { apiGet, apiSend } from "@/lib/api";
-import type { Income, MonthlySummary } from "@/types";
+import type { Category, Income, MonthlySummary } from "@/types";
 import { currentMonthStart, formatCompactMoney, formatMoney, formatMonthLabel } from "@/lib/format";
 import { currencyNoun, findCurrency } from "@/lib/currencies";
 import { monthKeysBetween, monthsAgoStart, todayISO, type MonthPreset } from "@/lib/dateRange";
 import { CATEGORICAL_PALETTE, CHART_INK, OTHER_COLOR } from "@/lib/chartPalette";
+import { FilterSelect, FilterText, PresetButtons } from "@/components/ui/FilterControls";
 import IncomeRow from "@/components/IncomeRow";
 import IncomeModal from "@/components/IncomeModal";
 
@@ -28,28 +29,33 @@ function sourceKey(i: Income): string {
 
 export default function IncomePage() {
   const [incomes, setIncomes] = useState<Income[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [monthSummary, setMonthSummary] = useState<MonthlySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Income | null>(null);
 
-  // Filters (item 10)
+  // Filters (item 4)
   const [from, setFrom] = useState<string>(monthsAgoStart(12));
   const [to, setTo] = useState<string>(todayISO());
   const [preset, setPreset] = useState<MonthPreset | null>(12);
-  const [source, setSource] = useState<string>("all");
-  const [entryType, setEntryType] = useState<string>("all");
-  const [currencyFilter, setCurrencyFilter] = useState<string>("all");
+  const [entryType, setEntryType] = useState("all");
+  const [currencyFilter, setCurrencyFilter] = useState("all");
+  const [sourceType, setSourceType] = useState("all"); // income category
+  const [sourceName, setSourceName] = useState("all"); // source_name value
+  const [keyword, setKeyword] = useState("");
 
   async function load() {
     setLoading(true);
     try {
-      const [list, summary] = await Promise.all([
+      const [list, summary, cats] = await Promise.all([
         apiGet("/api/incomes"),
         apiGet(`/api/reports/monthly-summary?from=${currentMonthStart()}`),
+        apiGet("/api/income-categories"),
       ]);
       setIncomes(list ?? []);
       setMonthSummary(summary);
+      setCategories(cats ?? []);
     } finally {
       setLoading(false);
     }
@@ -74,40 +80,34 @@ export default function IncomePage() {
     setTo(todayISO());
   }
 
-  // Distinct options for the source and currency dropdowns.
-  const sourceOptions = useMemo(() => {
+  const sourceNameOptions = useMemo(() => {
     const set = new Set<string>();
-    incomes.forEach((i) => set.add(sourceKey(i)));
+    incomes.forEach((i) => i.source_name && set.add(i.source_name));
     return [...set].sort();
   }, [incomes]);
 
-  const currencyOptions = useMemo(() => {
-    const set = new Set<string>();
-    incomes.forEach((i) => set.add(i.currency));
-    return [...set].sort();
-  }, [incomes]);
+  const currencyOptions = useMemo(() => [...new Set(incomes.map((i) => i.currency))].sort(), [incomes]);
 
-  // Apply every filter to the raw list.
   const filtered = useMemo(() => {
+    const kw = keyword.trim().toLowerCase();
     return incomes.filter((i) => {
       if (from && i.received_date < from) return false;
       if (to && i.received_date > to) return false;
-      if (source !== "all" && sourceKey(i) !== source) return false;
       if (entryType !== "all" && i.entry_source !== entryType) return false;
       if (currencyFilter !== "all" && i.currency !== currencyFilter) return false;
+      if (sourceType !== "all" && i.category_id !== sourceType) return false;
+      if (sourceName !== "all" && (i.source_name ?? "") !== sourceName) return false;
+      if (kw && !(i.description ?? "").toLowerCase().includes(kw)) return false;
       return true;
     });
-  }, [incomes, from, to, source, entryType, currencyFilter]);
+  }, [incomes, from, to, entryType, currencyFilter, sourceType, sourceName, keyword]);
 
-  const filteredTotal = useMemo(
-    () => filtered.reduce((s, i) => s + (i.amount_primary != null ? Number(i.amount_primary) : i.currency === currency ? Number(i.amount) : 0), 0),
-    [filtered, currency]
-  );
+  const val = (i: Income) => (i.amount_primary != null ? Number(i.amount_primary) : i.currency === currency ? Number(i.amount) : 0);
+
+  const filteredTotal = useMemo(() => filtered.reduce((s, i) => s + val(i), 0), [filtered, currency]);
 
   // Top Income Sources line chart (item 9): one line per top source over months.
   const { chartData, topSources } = useMemo(() => {
-    const val = (i: Income) => (i.amount_primary != null ? Number(i.amount_primary) : i.currency === currency ? Number(i.amount) : 0);
-
     const totalBySource = new Map<string, number>();
     filtered.forEach((i) => totalBySource.set(sourceKey(i), (totalBySource.get(sourceKey(i)) ?? 0) + val(i)));
     const ranked = [...totalBySource.entries()].sort((a, b) => b[1] - a[1]);
@@ -166,63 +166,23 @@ export default function IncomePage() {
 
       {/* Filters */}
       <div className="mb-6 rounded-xl2 bg-white p-4 shadow-card dark:bg-night-card">
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          {([1, 3, 6, 12] as MonthPreset[]).map((p) => (
-            <button
-              key={p}
-              onClick={() => applyPreset(p)}
-              className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${
-                preset === p
-                  ? "bg-forest text-cream shadow-card"
-                  : "bg-forest-50 text-forest-dark dark:bg-white/5 dark:text-night-ink"
-              }`}
-            >
-              {p === 1 ? "This month" : `${p} months`}
-            </button>
-          ))}
+        <div className="mb-3">
+          <PresetButtons active={preset} onPick={applyPreset} />
         </div>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label className="block">
             <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-forest-light dark:text-night-muted">From</span>
-            <input
-              type="date"
-              value={from}
-              max={to}
-              onChange={(e) => {
-                setFrom(e.target.value);
-                setPreset(null);
-              }}
-              className="ww-input py-2"
-            />
+            <input type="date" value={from} max={to} onChange={(e) => { setFrom(e.target.value); setPreset(null); }} className="ww-input py-2" />
           </label>
           <label className="block">
             <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-forest-light dark:text-night-muted">To</span>
-            <input
-              type="date"
-              value={to}
-              min={from}
-              max={todayISO()}
-              onChange={(e) => {
-                setTo(e.target.value);
-                setPreset(null);
-              }}
-              className="ww-input py-2"
-            />
+            <input type="date" value={to} min={from} max={todayISO()} onChange={(e) => { setTo(e.target.value); setPreset(null); }} className="ww-input py-2" />
           </label>
-          <Select label="Source" value={source} onChange={setSource} options={[["all", "All sources"], ...sourceOptions.map((s) => [s, s] as [string, string])]} />
-          <Select
-            label="Input type"
-            value={entryType}
-            onChange={setEntryType}
-            options={[["all", "All types"], ...ENTRY_TYPES.map((t) => [t, t[0].toUpperCase() + t.slice(1)] as [string, string])]}
-          />
-          <Select
-            label="Currency"
-            value={currencyFilter}
-            onChange={setCurrencyFilter}
-            options={[["all", "All currencies"], ...currencyOptions.map((c) => [c, `${findCurrency(c)?.symbol ?? ""} ${c}`.trim()] as [string, string])]}
-          />
+          <FilterSelect label="Source type" value={sourceType} onChange={setSourceType} options={[["all", "All source types"], ...categories.map((c) => [c.id, `${c.icon} ${c.label}`] as [string, string])]} />
+          <FilterSelect label="Source name" value={sourceName} onChange={setSourceName} options={[["all", "All source names"], ...sourceNameOptions.map((s) => [s, s] as [string, string])]} />
+          <FilterSelect label="Input type" value={entryType} onChange={setEntryType} options={[["all", "All types"], ...ENTRY_TYPES.map((t) => [t, t[0].toUpperCase() + t.slice(1)] as [string, string])]} />
+          <FilterSelect label="Currency" value={currencyFilter} onChange={setCurrencyFilter} options={[["all", "All currencies"], ...currencyOptions.map((c) => [c, `${findCurrency(c)?.symbol ?? ""} ${c}`.trim()] as [string, string])]} />
+          <FilterText label="Description keyword" value={keyword} onChange={setKeyword} placeholder="e.g. bonus" />
         </div>
         <p className="mt-3 text-xs text-forest-light dark:text-night-muted">
           {filtered.length} entr{filtered.length === 1 ? "y" : "ies"} · {formatMoney(filteredTotal, currency)} in range
@@ -293,30 +253,5 @@ export default function IncomePage() {
         />
       )}
     </div>
-  );
-}
-
-function Select({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  options: [string, string][];
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-forest-light dark:text-night-muted">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="ww-input py-2">
-        {options.map(([v, l]) => (
-          <option key={v} value={v}>
-            {l}
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }

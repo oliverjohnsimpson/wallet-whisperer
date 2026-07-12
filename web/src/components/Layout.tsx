@@ -58,6 +58,14 @@ export default function Layout({ children }: { children: ReactNode }) {
             )}
           </div>
 
+          {/* Tagline under the logo (mirrors the login screen) */}
+          {!collapsed && (
+            <p className="mb-5 px-1 text-[11px] text-forest-light dark:text-night-muted">
+              <span className="italic">Listen to your</span> <span className="font-semibold text-coral">money</span>{" "}
+              <span className="italic">talk</span>
+            </p>
+          )}
+
           {collapsed && (
             <button
               onClick={() => setCollapsed(false)}
@@ -122,16 +130,20 @@ export default function Layout({ children }: { children: ReactNode }) {
               onClick={signOut}
               title={`Sign out (${user?.email ?? ""})`}
               aria-label="Sign out"
-              className="flex w-full justify-center rounded-full py-2.5 text-lg text-coral hover:bg-coral/10"
+              className="group flex w-full justify-center rounded-full py-2.5 text-lg text-coral hover:bg-coral/10"
             >
-              ⎋
+              <span className="inline-block transition-transform group-hover:translate-x-0.5">🚪</span>
             </button>
           ) : (
             <div className="rounded-xl2 bg-forest-50 p-3 dark:bg-white/5">
               <p className="truncate text-xs font-semibold text-forest-dark dark:text-night-ink">
                 {user?.email ?? "Signed in"}
               </p>
-              <button onClick={signOut} className="mt-1 text-xs font-semibold text-coral hover:underline">
+              <button
+                onClick={signOut}
+                className="group mt-1 flex items-center gap-1.5 text-xs font-semibold text-coral hover:underline"
+              >
+                <span className="inline-block transition-transform group-hover:translate-x-0.5">🚪</span>
                 Sign out
               </button>
             </div>

@@ -8,7 +8,7 @@ import CurrencySelect from "@/components/ui/CurrencySelect";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import AmountSlider from "@/components/ui/AmountSlider";
 
-type Tab = "manual" | "voice" | "receipt";
+type Tab = "manual" | "voice" | "receipt" | "paste";
 
 interface DraftState {
   amount: string;
@@ -82,6 +82,7 @@ export default function ExpenseModal({
   );
   const [rawInput, setRawInput] = useState<string | null>(expense?.raw_input ?? null);
   const [receiptUrl, setReceiptUrl] = useState<string | null>(expense?.receipt_url ?? null);
+  const [pasteText, setPasteText] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -109,7 +110,7 @@ export default function ExpenseModal({
     apiGet("/api/budgets").then(setBudgets).catch(() => {});
   }, []);
 
-  function applyAiDraft(d: ExpenseDraft, kind: "voice" | "receipt") {
+  function applyAiDraft(d: ExpenseDraft, kind: "voice" | "receipt" | "penny") {
     setDraft((prev) => ({ ...fromAiDraft(d), budget_id: prev.budget_id || defaultBudgetId || "" }));
     setSource(kind);
   }
@@ -179,6 +180,22 @@ export default function ExpenseModal({
     }
   }
 
+  async function submitPaste() {
+    const text = pasteText.trim();
+    if (!text) return;
+    setAiBusy(true);
+    setAiError(null);
+    try {
+      const { draft: aiDraft } = await apiSend("POST", "/api/ai/parse-text", { text, kind: "expense" });
+      setRawInput(text);
+      applyAiDraft(aiDraft, "penny");
+    } catch (err: any) {
+      setAiError(err.message ?? "Couldn't parse that text.");
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
   async function createBudgetInline() {
     if (!newBudgetName.trim()) return;
     setBudgetSaving(true);
@@ -237,6 +254,7 @@ export default function ExpenseModal({
     { id: "manual", label: "Manual", icon: "⌨️" },
     { id: "voice", label: "Voice", icon: "🎙️" },
     { id: "receipt", label: "Receipt", icon: "🧾" },
+    { id: "paste", label: "Paste", icon: "📋" },
   ];
 
   return (
@@ -253,8 +271,9 @@ export default function ExpenseModal({
               setSource("manual");
               setReceiptUrl(null);
               setRawInput(null);
+              setPasteText("");
             }}
-            className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${
+            className={`flex-1 rounded-full py-2 text-xs font-semibold transition sm:text-sm ${
               tab === t.id ? "bg-forest text-cream shadow-card" : "text-forest-dark dark:text-night-ink"
             }`}
           >
@@ -300,6 +319,26 @@ export default function ExpenseModal({
             </label>
             {aiBusy && <p className="mt-2 text-sm text-forest-light dark:text-night-muted">Penny is reading your receipt…</p>}
             {receiptUrl && <img src={receiptUrl} alt="Receipt preview" className="mx-auto mt-3 max-h-40 rounded-lg shadow-card" />}
+          </div>
+        )}
+
+        {tab === "paste" && (
+          <div className="mb-5 rounded-xl2 bg-forest-50 p-4 dark:bg-white/5">
+            <textarea
+              value={pasteText}
+              onChange={(e) => setPasteText(e.target.value)}
+              rows={3}
+              placeholder="Paste a card SMS, UPI alert, or order confirmation…"
+              className={inputClass}
+            />
+            <button
+              type="button"
+              onClick={submitPaste}
+              disabled={aiBusy || !pasteText.trim()}
+              className="mt-2 w-full rounded-full bg-forest py-2 text-sm font-semibold text-cream shadow-card disabled:opacity-60"
+            >
+              {aiBusy ? "Penny is parsing…" : "✨ Extract with Penny"}
+            </button>
           </div>
         )}
 
