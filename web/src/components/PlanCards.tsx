@@ -8,18 +8,32 @@ export default function PlanCards({ compact = false }: { compact?: boolean }) {
   const { tier: currentTier, razorpayKeyId, paymentLinks, refresh } = useSubscription();
   const [busy, setBusy] = useState<Tier | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [awaitingConfirm, setAwaitingConfirm] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function confirmPayment() {
+    setRefreshing(true);
+    try {
+      await refresh();
+      setNote("Refreshed! If your payment is confirmed, your new plan is now active.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function upgrade(tier: Tier) {
     if (tier === "free") return;
     setBusy(tier);
     setNote(null);
+    setAwaitingConfirm(false);
 
     // If API-based subscriptions aren't configured but a hosted payment link is,
     // send the user straight to the Razorpay payment page.
     const link = tier === "professional" ? paymentLinks.professional : paymentLinks.standard;
     if (!razorpayKeyId && link) {
       window.open(link, "_blank", "noopener");
-      setNote("Opened the secure Razorpay payment page in a new tab. Your plan activates once payment is confirmed.");
+      setNote("Opened the secure Razorpay payment page in a new tab. Once your payment is confirmed, tap “I've completed payment” to refresh your plan.");
+      setAwaitingConfirm(true);
       setBusy(null);
       return;
     }
@@ -118,7 +132,20 @@ export default function PlanCards({ compact = false }: { compact?: boolean }) {
           );
         })}
       </div>
-      {note && <p className="mt-4 rounded-lg bg-gold/10 p-3 text-center text-sm text-forest-dark dark:text-night-ink">{note}</p>}
+      {note && (
+        <div className="mt-4 rounded-lg bg-gold/10 p-3 text-center text-sm text-forest-dark dark:text-night-ink">
+          <p>{note}</p>
+          {awaitingConfirm && (
+            <button
+              onClick={confirmPayment}
+              disabled={refreshing}
+              className="mt-2 rounded-full bg-forest px-4 py-1.5 text-xs font-semibold text-cream shadow-card transition hover:bg-forest-dark disabled:opacity-60"
+            >
+              {refreshing ? "Checking…" : "I've completed payment — refresh my plan"}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
