@@ -15,18 +15,18 @@ import type { CategoryTotal, MonthlySummary } from "@/types";
 import { formatCompactMoney, formatMoney, formatMonthLabel } from "@/lib/format";
 import { CATEGORICAL_PALETTE, CHART_INK, OTHER_COLOR } from "@/lib/chartPalette";
 import { monthsAgoStart, todayISO, type MonthPreset } from "@/lib/dateRange";
-import type { PieDatum } from "@/components/charts/Pie3D";
+import type { DoughnutDatum } from "@/components/charts/Doughnut3D";
 
 // three.js is heavy — load the 3D charts on their own so the 2D charts paint first.
 const SavingsBars3D = lazy(() => import("@/components/charts/SavingsBars3D"));
-const Pie3D = lazy(() => import("@/components/charts/Pie3D"));
+const Doughnut3D = lazy(() => import("@/components/charts/Doughnut3D"));
 
 const TOP_N = 6;
 
 /** Fold a category-totals list into the top N slices (+ an "Other" slice). */
-function toPie(list: CategoryTotal[]): PieDatum[] {
+function toPie(list: CategoryTotal[]): DoughnutDatum[] {
   const sorted = [...list].sort((a, b) => b.total - a.total);
-  const top: PieDatum[] = sorted.slice(0, TOP_N).map((c, i) => ({
+  const top: DoughnutDatum[] = sorted.slice(0, TOP_N).map((c, i) => ({
     name: c.label,
     color: c.color || CATEGORICAL_PALETTE[i % CATEGORICAL_PALETTE.length],
     value: c.total,
@@ -179,24 +179,24 @@ export default function Reports() {
             )}
           </div>
 
-          {/* 3D pie charts: income by source & expenses by category */}
+          {/* 3D doughnut charts: income by source & expenses by category */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <Card3D title="Income by source (3D)">
+            <Card3D title="Income by source">
               {incomePie.length === 0 ? (
                 <Empty3D label="No income in this range." />
               ) : (
                 <Suspense fallback={<Chart3DFallback />}>
-                  <Pie3D data={incomePie} currency={currency} />
+                  <Doughnut3D data={incomePie} currency={currency} />
                 </Suspense>
               )}
               <Legend3D data={incomePie} currency={currency} />
             </Card3D>
-            <Card3D title="Expenses by category (3D)">
+            <Card3D title="Expenses by category">
               {expensePie.length === 0 ? (
                 <Empty3D label="No expenses in this range." />
               ) : (
                 <Suspense fallback={<Chart3DFallback />}>
-                  <Pie3D data={expensePie} currency={currency} />
+                  <Doughnut3D data={expensePie} currency={currency} />
                 </Suspense>
               )}
               <Legend3D data={expensePie} currency={currency} />
@@ -216,7 +216,7 @@ export default function Reports() {
   );
 }
 
-function Legend3D({ data, currency }: { data: PieDatum[]; currency: string }) {
+function Legend3D({ data, currency }: { data: DoughnutDatum[]; currency: string }) {
   if (data.length === 0) return null;
   return (
     <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
