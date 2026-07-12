@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import PennyWidget from "@/components/PennyWidget";
+import FeedbackModal from "@/components/FeedbackModal";
 
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard", icon: "🏡" },
@@ -19,6 +20,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const { theme, toggle } = useTheme();
   const { tier } = useSubscription();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("ww-sidebar-collapsed") === "1");
+  const [showFeedback, setShowFeedback] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("ww-sidebar-collapsed", collapsed ? "1" : "0");
@@ -125,6 +127,18 @@ export default function Layout({ children }: { children: ReactNode }) {
             {!collapsed && (theme === "dark" ? "Light mode" : "Dark mode")}
           </button>
 
+          <button
+            onClick={() => setShowFeedback(true)}
+            aria-label="Give feedback"
+            title="Give feedback"
+            className={`flex items-center rounded-full font-semibold text-forest-dark transition hover:bg-forest-50 dark:text-night-ink dark:hover:bg-white/5 ${
+              collapsed ? "w-full justify-center py-2.5" : "w-full gap-3 px-4 py-2.5"
+            }`}
+          >
+            <span className="text-lg">⭐</span>
+            {!collapsed && "Give feedback"}
+          </button>
+
           {collapsed ? (
             <button
               onClick={signOut}
@@ -154,6 +168,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       <main className="flex-1 overflow-y-auto scrollbar-thin">{children}</main>
 
       <PennyWidget />
+      {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
     </div>
   );
 }

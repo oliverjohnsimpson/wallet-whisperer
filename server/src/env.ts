@@ -32,6 +32,10 @@ export const env = {
   // set up in Razorpay — the yearly toggle stays hidden in production until then.
   razorpayPaymentUrlStandardYearly: process.env.RAZORPAY_PAYMENT_URL_STANDARD_YEARLY ?? "",
   razorpayPaymentUrlProfessionalYearly: process.env.RAZORPAY_PAYMENT_URL_PROFESSIONAL_YEARLY ?? "",
+  // App-store listing URLs — used to deep-link happy users to leave a review.
+  // Left blank until the apps are published; the store prompt stays hidden until set.
+  playStoreUrl: process.env.PLAY_STORE_URL ?? "",
+  appStoreUrl: process.env.APP_STORE_URL ?? "",
 };
 
 export const razorpayConfigured = Boolean(env.razorpayKeyId && env.razorpayKeySecret);

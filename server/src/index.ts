@@ -11,6 +11,7 @@ import { profileRouter } from "./routes/profile.js";
 import { aiRouter } from "./routes/ai.js";
 import { billingRouter, billingWebhookHandler } from "./routes/billing.js";
 import { fxRouter } from "./routes/fx.js";
+import { feedbackRouter } from "./routes/feedback.js";
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use("/api/reports", reportsRouter);
 app.use("/api/profile", profileRouter);
 app.use("/api/billing", billingRouter);
 app.use("/api/fx", fxRouter);
+app.use("/api/feedback", feedbackRouter);
 app.use("/api/ai", aiRouter);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
