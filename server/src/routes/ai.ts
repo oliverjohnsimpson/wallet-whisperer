@@ -262,106 +262,179 @@ async function runPennyTool(name: string, args: any, db: SupabaseClient, userId:
   return { result: { ok: false, error: `Unknown tool ${name}` } };
 }
 
-/** POST /api/ai/chat — { message } → { reply, actions }. Penny can answer and take actions. */
+/** Free tier is capped on Penny messages/day. Returns a 403 body if over the limit, else null. */
+async function pennyLimit(db: SupabaseClient, userId: string) {
+  const tier = await getTier(db, userId);
+  if (tier !== "free") return null;
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const { count } = await db
+    .from("chat_messages")
+    .select("id", { count: "exact", head: true })
+    .eq("role", "user")
+    .gte("created_at", startOfDay.toISOString());
+  if ((count ?? 0) >= FREE_LIMITS.pennyMessagesPerDay) {
+    return {
+      error: `You've reached today's ${FREE_LIMITS.pennyMessagesPerDay}-message limit with Penny on the Free plan. Upgrade for unlimited chats.`,
+      code: "upgrade_required",
+      requiredTier: "standard" as const,
+      currentTier: tier,
+    };
+  }
+  return null;
+}
+
+/**
+ * Run one Penny turn. `text` is the user's words (typed and/or transcribed);
+ * `imageDataUri`, when present, is handed to the vision-capable model. `persistText`
+ * is what we store as the user's message (text + any attachment marker). A session
+ * groups one login's conversation so a fresh session starts clean; every message is
+ * still persisted. Returns { reply, actions }.
+ */
+async function runPennyTurn(
+  db: SupabaseClient,
+  userId: string,
+  sessionId: string | null,
+  text: string,
+  imageDataUri: string | null,
+  persistText: string
+) {
+  const [context, { data: history }] = await Promise.all([
+    buildUserFinancialContext(db, userId),
+    (() => {
+      let q = db
+        .from("chat_messages")
+        .select("role, content")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(16);
+      if (sessionId) q = q.eq("session_id", sessionId);
+      return q;
+    })(),
+  ]);
+
+  const orderedHistory = (history ?? []).slice().reverse();
+  const today = new Date().toISOString().slice(0, 10);
+
+  const userContent: any = imageDataUri
+    ? [
+        { type: "text", text: text || "Here's an image — please help based on what you see." },
+        { type: "image_url", image_url: { url: imageDataUri } },
+      ]
+    : text;
+
+  const messages: any[] = [
+    { role: "system", content: PENNY_PERSONA },
+    { role: "system", content: `Today is ${today}.\nCONTEXT (JSON, last 60 days):\n${JSON.stringify(context)}` },
+    ...orderedHistory.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+    { role: "user", content: userContent },
+  ];
+
+  const actions: any[] = [];
+  let reply = "";
+
+  for (let step = 0; step < 5; step++) {
+    const completion = await openai.chat.completions.create({
+      model: env.chatModel,
+      messages,
+      tools: PENNY_TOOLS,
+      temperature: 0.5,
+    });
+    const msg = completion.choices[0]?.message;
+    if (!msg) break;
+
+    if (msg.tool_calls?.length) {
+      messages.push(msg);
+      for (const tc of msg.tool_calls) {
+        let parsedArgs: any = {};
+        try {
+          parsedArgs = JSON.parse(tc.function.arguments || "{}");
+        } catch {
+          /* leave empty */
+        }
+        const { result, action } = await runPennyTool(tc.function.name, parsedArgs, db, userId);
+        if (action) actions.push(action);
+        messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(result) });
+      }
+      continue; // let the model read tool results and respond
+    }
+
+    reply = msg.content ?? "";
+    break;
+  }
+
+  if (!reply) reply = "Done!";
+
+  await db.from("chat_messages").insert([
+    { user_id: userId, role: "user", content: persistText, session_id: sessionId },
+    { user_id: userId, role: "assistant", content: reply, session_id: sessionId },
+  ]);
+
+  return { reply, actions };
+}
+
+/** POST /api/ai/chat — { message, sessionId } → { reply, actions }. */
 aiRouter.post("/chat", async (req, res) => {
   const message = String(req.body?.message ?? "").trim();
   if (!message) return res.status(400).json({ error: "message is required" });
-  // A session groups one login's conversation. History for context/continuity is
-  // scoped to it so a fresh session starts clean (and shows starter prompts),
-  // while every message is still persisted to the database.
   const sessionId = req.body?.sessionId ? String(req.body.sessionId).slice(0, 64) : null;
 
-  // Free tier is capped on Penny messages per day.
-  const tier = await getTier(req.db, req.userId);
-  if (tier === "free") {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const { count } = await req.db
-      .from("chat_messages")
-      .select("id", { count: "exact", head: true })
-      .eq("role", "user")
-      .gte("created_at", startOfDay.toISOString());
-    if ((count ?? 0) >= FREE_LIMITS.pennyMessagesPerDay) {
-      return res.status(403).json({
-        error: `You've reached today's ${FREE_LIMITS.pennyMessagesPerDay}-message limit with Penny on the Free plan. Upgrade for unlimited chats.`,
-        code: "upgrade_required",
-        requiredTier: "standard",
-        currentTier: tier,
-      });
-    }
-  }
+  const limit = await pennyLimit(req.db, req.userId);
+  if (limit) return res.status(403).json(limit);
 
   try {
-    const [context, { data: history }] = await Promise.all([
-      buildUserFinancialContext(req.db, req.userId),
-      (() => {
-        let q = req.db
-          .from("chat_messages")
-          .select("role, content")
-          .eq("user_id", req.userId)
-          .order("created_at", { ascending: false })
-          .limit(16);
-        if (sessionId) q = q.eq("session_id", sessionId);
-        return q;
-      })(),
-    ]);
-
-    const orderedHistory = (history ?? []).slice().reverse();
-    const today = new Date().toISOString().slice(0, 10);
-
-    const messages: any[] = [
-      { role: "system", content: PENNY_PERSONA },
-      { role: "system", content: `Today is ${today}.\nCONTEXT (JSON, last 60 days):\n${JSON.stringify(context)}` },
-      ...orderedHistory.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-      { role: "user", content: message },
-    ];
-
-    const actions: any[] = [];
-    let reply = "";
-
-    for (let step = 0; step < 5; step++) {
-      const completion = await openai.chat.completions.create({
-        model: env.chatModel,
-        messages,
-        tools: PENNY_TOOLS,
-        temperature: 0.5,
-      });
-      const msg = completion.choices[0]?.message;
-      if (!msg) break;
-
-      if (msg.tool_calls?.length) {
-        messages.push(msg);
-        for (const tc of msg.tool_calls) {
-          let parsedArgs: any = {};
-          try {
-            parsedArgs = JSON.parse(tc.function.arguments || "{}");
-          } catch {
-            /* leave empty */
-          }
-          const { result, action } = await runPennyTool(tc.function.name, parsedArgs, req.db, req.userId);
-          if (action) actions.push(action);
-          messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(result) });
-        }
-        continue; // let the model read tool results and respond
-      }
-
-      reply = msg.content ?? "";
-      break;
-    }
-
-    if (!reply) reply = "Done!";
-
-    await req.db.from("chat_messages").insert([
-      { user_id: req.userId, role: "user", content: message, session_id: sessionId },
-      { user_id: req.userId, role: "assistant", content: reply, session_id: sessionId },
-    ]);
-
-    res.json({ reply, actions });
+    const out = await runPennyTurn(req.db, req.userId, sessionId, message, null, message);
+    res.json(out);
   } catch (err: any) {
     console.error("[ai/chat]", err);
     res.status(502).json({ error: "Penny is having trouble thinking right now. Try again in a moment." });
   }
 });
+
+/**
+ * POST /api/ai/chat/rich (multipart) — Penny chat with an optional image and/or
+ * voice note. Fields: message?, sessionId?, image? (file), audio? (file).
+ * Voice notes are transcribed with Whisper; images are read by the vision model.
+ */
+aiRouter.post(
+  "/chat/rich",
+  upload.fields([
+    { name: "image", maxCount: 1 },
+    { name: "audio", maxCount: 1 },
+  ]),
+  async (req: any, res) => {
+    const sessionId = req.body?.sessionId ? String(req.body.sessionId).slice(0, 64) : null;
+    const typed = String(req.body?.message ?? "").trim();
+    const imageFile: Express.Multer.File | undefined = req.files?.image?.[0];
+    const audioFile: Express.Multer.File | undefined = req.files?.audio?.[0];
+
+    if (!typed && !imageFile && !audioFile) {
+      return res.status(400).json({ error: "Send a message, an image, or a voice note." });
+    }
+    if (imageFile && !imageFile.mimetype?.startsWith("image/")) {
+      return res.status(400).json({ error: "That attachment doesn't look like an image." });
+    }
+
+    const limit = await pennyLimit(req.db, req.userId);
+    if (limit) return res.status(403).json(limit);
+
+    try {
+      const transcript = audioFile ? await transcribeAudio(audioFile) : "";
+      const combined = [typed, transcript].filter(Boolean).join(" ").trim();
+      const imageDataUri = imageFile ? `data:${imageFile.mimetype};base64,${imageFile.buffer.toString("base64")}` : null;
+
+      // Stored representation of the user's turn (words + attachment markers).
+      const markers = [imageFile ? "📷 image" : "", audioFile ? "🎙️ voice note" : ""].filter(Boolean).join(", ");
+      const persistText = combined ? (markers ? `${combined}  ·  (${markers})` : combined) : `(${markers})`;
+
+      const out = await runPennyTurn(req.db, req.userId, sessionId, combined, imageDataUri, persistText);
+      res.json({ ...out, transcript: transcript || undefined });
+    } catch (err: any) {
+      console.error("[ai/chat/rich]", err);
+      res.status(502).json({ error: "Penny couldn't process that. Try again in a moment." });
+    }
+  }
+);
 
 /** GET /api/ai/chat/history?sessionId= — messages for one session (or all if omitted). */
 aiRouter.get("/chat/history", async (req, res) => {
