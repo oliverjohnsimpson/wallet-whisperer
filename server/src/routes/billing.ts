@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import crypto from "node:crypto";
 import { requireAuth } from "../middleware/auth.js";
-import { env, razorpayConfigured } from "../env.js";
+import { env, razorpayConfigured, yearlyBillingAvailable } from "../env.js";
 import { supabaseAdmin } from "../supabaseAdmin.js";
 import { getTier } from "../lib/subscription.js";
 import type { Tier } from "../lib/entitlements.js";
@@ -31,9 +31,12 @@ billingRouter.get("/status", async (req, res) => {
     tier,
     subscription: sub ?? null,
     razorpayKeyId: env.razorpayKeyId || null,
+    yearlyAvailable: yearlyBillingAvailable,
     paymentLinks: {
       standard: env.razorpayPaymentUrlStandard || null,
       professional: env.razorpayPaymentUrlProfessional || null,
+      standardYearly: env.razorpayPaymentUrlStandardYearly || null,
+      professionalYearly: env.razorpayPaymentUrlProfessionalYearly || null,
     },
   });
 });

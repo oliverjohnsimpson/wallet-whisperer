@@ -6,16 +6,21 @@ import { type Feature, type Tier, hasFeature as tierHasFeature, normalizeTier } 
 interface PaymentLinks {
   standard: string | null;
   professional: string | null;
+  standardYearly: string | null;
+  professionalYearly: string | null;
 }
 
 interface SubscriptionContextValue {
   tier: Tier;
   razorpayKeyId: string | null;
   paymentLinks: PaymentLinks;
+  yearlyAvailable: boolean;
   loading: boolean;
   has: (feature: Feature) => boolean;
   refresh: () => Promise<void>;
 }
+
+const EMPTY_LINKS: PaymentLinks = { standard: null, professional: null, standardYearly: null, professionalYearly: null };
 
 const SubscriptionContext = createContext<SubscriptionContextValue | undefined>(undefined);
 
@@ -23,7 +28,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
   const [tier, setTier] = useState<Tier>("free");
   const [razorpayKeyId, setRazorpayKeyId] = useState<string | null>(null);
-  const [paymentLinks, setPaymentLinks] = useState<PaymentLinks>({ standard: null, professional: null });
+  const [paymentLinks, setPaymentLinks] = useState<PaymentLinks>(EMPTY_LINKS);
+  const [yearlyAvailable, setYearlyAvailable] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -36,7 +42,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       const data = await apiGet("/api/billing/status");
       setTier(normalizeTier(data?.tier));
       setRazorpayKeyId(data?.razorpayKeyId ?? null);
-      setPaymentLinks(data?.paymentLinks ?? { standard: null, professional: null });
+      setPaymentLinks({ ...EMPTY_LINKS, ...(data?.paymentLinks ?? {}) });
+      setYearlyAvailable(Boolean(data?.yearlyAvailable));
     } catch {
       setTier("free");
     } finally {
@@ -50,7 +57,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   return (
     <SubscriptionContext.Provider
-      value={{ tier, razorpayKeyId, paymentLinks, loading, has: (f) => tierHasFeature(tier, f), refresh }}
+      value={{ tier, razorpayKeyId, paymentLinks, yearlyAvailable, loading, has: (f) => tierHasFeature(tier, f), refresh }}
     >
       {children}
     </SubscriptionContext.Provider>

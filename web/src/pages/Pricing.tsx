@@ -12,8 +12,13 @@ export default function Pricing() {
         </p>
       </div>
       <PlanCards />
-      <p className="mt-6 text-xs text-forest-light dark:text-night-muted">
-        Payments are processed securely by Razorpay. Prices are per month in INR.
+      <p className="mt-6 text-xs leading-relaxed text-forest-light dark:text-night-muted">
+        Payments are securely processed by Razorpay. All prices are exclusive of Goods and Services Tax (GST)
+        and any other applicable taxes or levies, which will be added at checkout as required by law. Amounts
+        shown in currencies other than the Indian Rupee (INR) are indicative estimates provided for convenience
+        only; the final amount is charged in INR, and your bank or card issuer's prevailing exchange rate and
+        any foreign-transaction fees may apply. By subscribing, you authorise the recurring charge for your
+        selected plan until you cancel.
       </p>
     </div>
   );

@@ -10,6 +10,7 @@ import { reportsRouter } from "./routes/reports.js";
 import { profileRouter } from "./routes/profile.js";
 import { aiRouter } from "./routes/ai.js";
 import { billingRouter, billingWebhookHandler } from "./routes/billing.js";
+import { fxRouter } from "./routes/fx.js";
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.use("/api/income-categories", incomeCategoriesRouter);
 app.use("/api/reports", reportsRouter);
 app.use("/api/profile", profileRouter);
 app.use("/api/billing", billingRouter);
+app.use("/api/fx", fxRouter);
 app.use("/api/ai", aiRouter);
 
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

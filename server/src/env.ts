@@ -28,6 +28,15 @@ export const env = {
   // collect payment, but tier activation is manual/webhook-based).
   razorpayPaymentUrlStandard: process.env.RAZORPAY_PAYMENT_URL_STANDARD ?? "",
   razorpayPaymentUrlProfessional: process.env.RAZORPAY_PAYMENT_URL_PROFESSIONAL ?? "",
+  // Yearly (annual, 10% off) hosted links. Left blank until the annual plans are
+  // set up in Razorpay — the yearly toggle stays hidden in production until then.
+  razorpayPaymentUrlStandardYearly: process.env.RAZORPAY_PAYMENT_URL_STANDARD_YEARLY ?? "",
+  razorpayPaymentUrlProfessionalYearly: process.env.RAZORPAY_PAYMENT_URL_PROFESSIONAL_YEARLY ?? "",
 };
 
 export const razorpayConfigured = Boolean(env.razorpayKeyId && env.razorpayKeySecret);
+
+/** True once the annual plans have hosted links (or API keys) configured. */
+export const yearlyBillingAvailable = Boolean(
+  env.razorpayPaymentUrlStandardYearly || env.razorpayPaymentUrlProfessionalYearly || razorpayConfigured
+);
