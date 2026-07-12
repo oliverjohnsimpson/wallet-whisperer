@@ -1,4 +1,4 @@
-import { findCurrency } from "./currencies";
+import { findCurrency, numberLocale, usesIndianGrouping } from "./currencies";
 
 export function formatMoney(amount: number | string, currency = "INR") {
   // Supabase/PostgREST serialize Postgres `numeric` columns as strings, so
@@ -7,23 +7,50 @@ export function formatMoney(amount: number | string, currency = "INR") {
   const numeric = typeof amount === "string" ? Number(amount) : amount;
   const symbol = findCurrency(currency)?.symbol ?? currency + " ";
   if (!Number.isFinite(numeric)) return `${symbol}0`;
-  return `${symbol}${numeric.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+  // ISO-4217 grouping: Indian currencies group 2-2-3 (₹90,12,34,56,789),
+  // everyone else groups 3-3-3 ($100,067,891,234). The locale drives this.
+  return `${symbol}${numeric.toLocaleString(numberLocale(currency), { maximumFractionDigits: 2 })}`;
 }
 
 export function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
-/** Compact money for chart axes/labels using Indian lakh/crore units (e.g. ₹1.2L, ₹3.4Cr). */
+// Compact scale steps, largest-first, for each grouping convention.
+const INDIAN_SCALE: { value: number; suffix: string }[] = [
+  { value: 1e19, suffix: "Shankh" },
+  { value: 1e17, suffix: "Padma" },
+  { value: 1e15, suffix: "Neel" },
+  { value: 1e13, suffix: "Kharab" },
+  { value: 1e11, suffix: "Arab" },
+  { value: 1e7, suffix: "Cr" },
+  { value: 1e5, suffix: "L" },
+  { value: 1e3, suffix: "K" },
+];
+const WESTERN_SCALE: { value: number; suffix: string }[] = [
+  { value: 1e12, suffix: "T" },
+  { value: 1e9, suffix: "B" },
+  { value: 1e6, suffix: "M" },
+  { value: 1e3, suffix: "K" },
+];
+
+/**
+ * Compact money for chart axes/labels, using the currency's own scale names:
+ * Indian lakh/crore/arab (₹1.2L, ₹3.4Cr, ₹5Arab) or Western K/M/B/T ($1.2M, $3.4B).
+ */
 export function formatCompactMoney(amount: number | string, currency = "INR") {
   const n = typeof amount === "string" ? Number(amount) : amount;
   const symbol = findCurrency(currency)?.symbol ?? currency + " ";
   if (!Number.isFinite(n)) return `${symbol}0`;
   const abs = Math.abs(n);
   const sign = n < 0 ? "-" : "";
-  if (abs >= 1e7) return `${sign}${symbol}${(abs / 1e7).toFixed(abs >= 1e8 ? 0 : 1)}Cr`;
-  if (abs >= 1e5) return `${sign}${symbol}${(abs / 1e5).toFixed(abs >= 1e6 ? 0 : 1)}L`;
-  if (abs >= 1e3) return `${sign}${symbol}${(abs / 1e3).toFixed(abs >= 1e4 ? 0 : 1)}k`;
+  const scale = usesIndianGrouping(currency) ? INDIAN_SCALE : WESTERN_SCALE;
+  for (const { value, suffix } of scale) {
+    if (abs >= value) {
+      const scaled = abs / value;
+      return `${sign}${symbol}${scaled.toFixed(scaled >= 100 ? 0 : 1)}${suffix}`;
+    }
+  }
   return `${sign}${symbol}${Math.round(abs)}`;
 }
 

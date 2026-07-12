@@ -266,6 +266,10 @@ async function runPennyTool(name: string, args: any, db: SupabaseClient, userId:
 aiRouter.post("/chat", async (req, res) => {
   const message = String(req.body?.message ?? "").trim();
   if (!message) return res.status(400).json({ error: "message is required" });
+  // A session groups one login's conversation. History for context/continuity is
+  // scoped to it so a fresh session starts clean (and shows starter prompts),
+  // while every message is still persisted to the database.
+  const sessionId = req.body?.sessionId ? String(req.body.sessionId).slice(0, 64) : null;
 
   // Free tier is capped on Penny messages per day.
   const tier = await getTier(req.db, req.userId);
@@ -290,12 +294,16 @@ aiRouter.post("/chat", async (req, res) => {
   try {
     const [context, { data: history }] = await Promise.all([
       buildUserFinancialContext(req.db, req.userId),
-      req.db
-        .from("chat_messages")
-        .select("role, content")
-        .eq("user_id", req.userId)
-        .order("created_at", { ascending: false })
-        .limit(16),
+      (() => {
+        let q = req.db
+          .from("chat_messages")
+          .select("role, content")
+          .eq("user_id", req.userId)
+          .order("created_at", { ascending: false })
+          .limit(16);
+        if (sessionId) q = q.eq("session_id", sessionId);
+        return q;
+      })(),
     ]);
 
     const orderedHistory = (history ?? []).slice().reverse();
@@ -344,8 +352,8 @@ aiRouter.post("/chat", async (req, res) => {
     if (!reply) reply = "Done!";
 
     await req.db.from("chat_messages").insert([
-      { user_id: req.userId, role: "user", content: message },
-      { user_id: req.userId, role: "assistant", content: reply },
+      { user_id: req.userId, role: "user", content: message, session_id: sessionId },
+      { user_id: req.userId, role: "assistant", content: reply, session_id: sessionId },
     ]);
 
     res.json({ reply, actions });
@@ -355,17 +363,33 @@ aiRouter.post("/chat", async (req, res) => {
   }
 });
 
-/** GET /api/ai/chat/history */
+/** GET /api/ai/chat/history?sessionId= — messages for one session (or all if omitted). */
 aiRouter.get("/chat/history", async (req, res) => {
-  const { data, error } = await req.db
+  let query = req.db
     .from("chat_messages")
     .select("id, role, content, created_at")
     .eq("user_id", req.userId)
     .order("created_at", { ascending: true })
     .limit(200);
+  if (req.query.sessionId) query = query.eq("session_id", String(req.query.sessionId));
 
+  const { data, error } = await query;
   if (sendIfError(res, error)) return;
   res.json(data);
+});
+
+/**
+ * DELETE /api/ai/chat/history?sessionId=
+ * Clears the user's Penny history. With sessionId, only that session; otherwise all.
+ * History stays in the database until this is called — the client uses it to start
+ * a user fresh while keeping the record until they explicitly clear it.
+ */
+aiRouter.delete("/chat/history", async (req, res) => {
+  let query = req.db.from("chat_messages").delete().eq("user_id", req.userId);
+  if (req.query.sessionId) query = query.eq("session_id", String(req.query.sessionId));
+  const { error } = await query;
+  if (sendIfError(res, error)) return;
+  res.status(204).end();
 });
 
 // ────────────────────────────────────────────────────────────

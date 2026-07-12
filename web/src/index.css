@@ -27,6 +27,49 @@
   }
 }
 
+@layer components {
+  .ww-input {
+    @apply w-full rounded-full border border-forest/15 bg-white px-4 py-2.5 text-forest-dark outline-none transition focus:border-gold focus:ring-2 focus:ring-gold/30 dark:border-white/15 dark:bg-night-800 dark:text-night-ink;
+  }
+}
+
+/* Penny launcher "shine" — a soft pulsing glow plus a sweeping highlight. */
+@keyframes penny-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(232, 163, 61, 0.55), 0 8px 20px rgba(27, 67, 50, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 18px 6px rgba(232, 163, 61, 0.85), 0 8px 20px rgba(27, 67, 50, 0.25);
+  }
+}
+.penny-shine {
+  animation: penny-glow 2.4s ease-in-out infinite;
+}
+.penny-shine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.7) 50%, transparent 70%);
+  background-size: 250% 250%;
+  animation: penny-sweep 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes penny-sweep {
+  0% {
+    background-position: 150% 0;
+  }
+  60%, 100% {
+    background-position: -50% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .penny-shine,
+  .penny-shine::after {
+    animation: none;
+  }
+}
+
 /* Branded range slider used by AmountSlider */
 .ww-range {
   -webkit-appearance: none;

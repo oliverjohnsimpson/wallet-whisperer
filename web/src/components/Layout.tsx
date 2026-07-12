@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { to: "/expenses", label: "Expenses", icon: "🧾" },
   { to: "/budgets", label: "Budgets", icon: "💼" },
   { to: "/reports", label: "Reports", icon: "📊" },
+  { to: "/profile", label: "Profile", icon: "👤" },
 ];
 
 export default function Layout({ children }: { children: ReactNode }) {

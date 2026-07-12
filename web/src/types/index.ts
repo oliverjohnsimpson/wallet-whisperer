@@ -65,9 +65,14 @@ export interface Income {
 export interface Profile {
   id: string;
   display_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  photo_url: string | null;
   avatar_url: string | null;
   default_currency: string;
   primary_currency: string;
+  subscription_tier?: string;
 }
 
 export interface ChatMessage {

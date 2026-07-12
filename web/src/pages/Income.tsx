@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { apiGet, apiSend } from "@/lib/api";
 import type { Income, MonthlySummary } from "@/types";
 import { currentMonthStart, formatMoney } from "@/lib/format";
+import { currencyNoun } from "@/lib/currencies";
 import IncomeRow from "@/components/IncomeRow";
 import IncomeModal from "@/components/IncomeModal";
 
@@ -45,7 +46,7 @@ export default function IncomePage() {
         <div>
           <h1 className="font-display text-3xl font-extrabold text-forest-dark dark:text-night-ink">Income</h1>
           <p className="text-forest-light dark:text-night-muted">
-            Salary, dividends, interest, rental — every rupee coming in.
+            Salary, dividends, interest, rental — every {currencyNoun(currency)} coming in.
           </p>
         </div>
         <button

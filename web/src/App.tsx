@@ -8,6 +8,7 @@ import ExpensesPage from "@/pages/Expenses";
 import Budgets from "@/pages/Budgets";
 import BudgetDetail from "@/pages/BudgetDetail";
 import Pricing from "@/pages/Pricing";
+import ProfilePage from "@/pages/Profile";
 import Layout from "@/components/Layout";
 
 // Recharts pulls in a sizeable chunk — only pay for it when Reports is actually visited.
@@ -96,6 +97,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Pricing />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <ProfilePage />
           </ProtectedRoute>
         }
       />
