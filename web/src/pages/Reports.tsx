@@ -5,39 +5,45 @@ import {
   CartesianGrid,
   ComposedChart,
   Legend,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import { apiGet } from "@/lib/api";
-import type { MonthlySummary } from "@/types";
+import type { CategoryTotal, MonthlySummary } from "@/types";
 import { formatCompactMoney, formatMoney, formatMonthLabel } from "@/lib/format";
 import { CATEGORICAL_PALETTE, CHART_INK, OTHER_COLOR } from "@/lib/chartPalette";
 import { monthsAgoStart, todayISO, type MonthPreset } from "@/lib/dateRange";
-import type { Series3D } from "@/components/charts/Lines3D";
+import type { PieDatum } from "@/components/charts/Pie3D";
 
 // three.js is heavy — load the 3D charts on their own so the 2D charts paint first.
 const SavingsBars3D = lazy(() => import("@/components/charts/SavingsBars3D"));
-const Lines3D = lazy(() => import("@/components/charts/Lines3D"));
-
-interface CategoryTrends {
-  primaryCurrency: string;
-  months: string[];
-  income: { key: string; label: string; color: string; values: number[] }[];
-  expenses: { key: string; label: string; color: string; values: number[] }[];
-}
+const Pie3D = lazy(() => import("@/components/charts/Pie3D"));
 
 const TOP_N = 6;
+
+/** Fold a category-totals list into the top N slices (+ an "Other" slice). */
+function toPie(list: CategoryTotal[]): PieDatum[] {
+  const sorted = [...list].sort((a, b) => b.total - a.total);
+  const top: PieDatum[] = sorted.slice(0, TOP_N).map((c, i) => ({
+    name: c.label,
+    color: c.color || CATEGORICAL_PALETTE[i % CATEGORICAL_PALETTE.length],
+    value: c.total,
+  }));
+  const rest = sorted.slice(TOP_N);
+  if (rest.length) {
+    const sum = rest.reduce((s, c) => s + c.total, 0);
+    if (sum > 0) top.push({ name: "Other", color: OTHER_COLOR, value: sum });
+  }
+  return top.filter((d) => d.value > 0);
+}
 
 export default function Reports() {
   const [preset, setPreset] = useState<MonthPreset | "all" | null>(12);
   const [from, setFrom] = useState<string>(monthsAgoStart(12));
   const [to, setTo] = useState<string>(todayISO());
   const [summary, setSummary] = useState<MonthlySummary | null>(null);
-  const [trends, setTrends] = useState<CategoryTrends | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
@@ -46,12 +52,10 @@ export default function Reports() {
     const requestId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
-    const qs = `from=${from}&to=${to}`;
-    Promise.all([apiGet(`/api/reports/monthly-summary?${qs}`), apiGet(`/api/reports/category-trends?${qs}`)])
-      .then(([s, t]) => {
+    apiGet(`/api/reports/monthly-summary?from=${from}&to=${to}`)
+      .then((s) => {
         if (requestId !== requestIdRef.current) return;
         setSummary(s);
-        setTrends(t);
       })
       .catch((err) => {
         if (requestId !== requestIdRef.current) return;
@@ -76,36 +80,8 @@ export default function Reports() {
     [summary]
   );
 
-  const labels = useMemo(() => (trends?.months ?? []).map((m) => formatMonthLabel(m, true)), [trends]);
-
-  // Fold a category-trends list into the top N series (+ an "Other" line).
-  function topSeries(list: CategoryTrends["income"] | undefined): Series3D[] {
-    if (!list || list.length === 0) return [];
-    const top = list.slice(0, TOP_N).map((s, i) => ({
-      name: s.label,
-      color: CATEGORICAL_PALETTE[i % CATEGORICAL_PALETTE.length],
-      values: s.values.map((v) => Math.round(v)),
-    }));
-    const rest = list.slice(TOP_N);
-    if (rest.length) {
-      const monthsLen = rest[0].values.length;
-      const other = Array.from({ length: monthsLen }, (_, i) => rest.reduce((sum, s) => sum + (s.values[i] ?? 0), 0));
-      if (other.some((v) => v > 0)) top.push({ name: "Other", color: OTHER_COLOR, values: other.map((v) => Math.round(v)) });
-    }
-    return top;
-  }
-
-  const incomeSeries = useMemo(() => topSeries(trends?.income), [trends]);
-  const expenseSeries = useMemo(() => topSeries(trends?.expenses), [trends]);
-
-  // 2D data for the expense-category line chart (item 13).
-  const expense2D = useMemo(() => {
-    return labels.map((label, i) => {
-      const row: Record<string, number | string> = { label };
-      expenseSeries.forEach((s) => (row[s.name] = s.values[i] ?? 0));
-      return row;
-    });
-  }, [labels, expenseSeries]);
+  const incomePie = useMemo(() => toPie(summary?.byIncomeCategory ?? []), [summary]);
+  const expensePie = useMemo(() => toPie(summary?.byExpenseCategory ?? []), [summary]);
 
   const tooltipStyle = { borderRadius: 12, border: "1px solid #e1e0d9" } as const;
   const fmt = (v: number) => formatMoney(v, currency);
@@ -117,7 +93,7 @@ export default function Reports() {
         <p className="text-forest-light dark:text-night-muted">Income, expenses, and savings — sliced any way you like.</p>
       </div>
 
-      {/* Filters: quick presets + custom from/to (item 15) */}
+      {/* Filters: quick presets + custom from/to */}
       <div className="mb-6 rounded-xl2 bg-white p-4 shadow-card dark:bg-night-card">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           {([1, 3, 6, 12] as MonthPreset[]).map((p) => (
@@ -165,7 +141,7 @@ export default function Reports() {
             <Tile label="Savings rate" value={`${Math.round(t.savingsRate * 100)}%`} className="bg-white text-forest-dark shadow-card dark:bg-night-card dark:text-night-ink" />
           </div>
 
-          {/* 3D income vs expenses — kept as-is (item 13) */}
+          {/* 3D income vs expenses — kept as-is */}
           <div className="rounded-xl2 bg-white p-6 shadow-card dark:bg-night-card">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-display text-lg font-bold text-forest-dark dark:text-night-ink">Income vs. expenses in 3D</h2>
@@ -174,27 +150,6 @@ export default function Reports() {
             <Suspense fallback={<Chart3DFallback />}>
               <SavingsBars3D months={summary.months} currency={currency} />
             </Suspense>
-          </div>
-
-          {/* Expense categories over time — line graphs (item 13) */}
-          <div className="rounded-xl2 bg-white p-6 shadow-card dark:bg-night-card">
-            <h2 className="mb-4 font-display text-lg font-bold text-forest-dark dark:text-night-ink">Expense categories over time</h2>
-            {expenseSeries.length === 0 || expense2D.length === 0 ? (
-              <p className="py-8 text-center text-forest-light dark:text-night-muted">No expenses in this range yet.</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={320}>
-                <LineChart data={expense2D} margin={{ left: 8, right: 16 }}>
-                  <CartesianGrid vertical={false} stroke={CHART_INK.grid} />
-                  <XAxis dataKey="label" stroke={CHART_INK.muted} fontSize={12} />
-                  <YAxis tickFormatter={(v) => formatCompactMoney(v, currency)} stroke={CHART_INK.muted} fontSize={12} width={64} />
-                  <Tooltip formatter={fmt} contentStyle={tooltipStyle} />
-                  <Legend />
-                  {expenseSeries.map((s) => (
-                    <Line key={s.name} type="monotone" dataKey={s.name} name={s.name} stroke={s.color} strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 5 }} />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            )}
           </div>
 
           {/* Monthly income, expenses & savings (2D composed) */}
@@ -224,25 +179,27 @@ export default function Reports() {
             )}
           </div>
 
-          {/* 3D line graphs replacing the old pie charts (item 14) */}
+          {/* 3D pie charts: income by source & expenses by category */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <Card3D title="Income sources over time (3D)">
-              {incomeSeries.length === 0 ? (
+            <Card3D title="Income by source (3D)">
+              {incomePie.length === 0 ? (
                 <Empty3D label="No income in this range." />
               ) : (
                 <Suspense fallback={<Chart3DFallback />}>
-                  <Lines3D series={incomeSeries} labels={labels} currency={currency} />
+                  <Pie3D data={incomePie} currency={currency} />
                 </Suspense>
               )}
+              <Legend3D data={incomePie} currency={currency} />
             </Card3D>
-            <Card3D title="Expense categories over time (3D)">
-              {expenseSeries.length === 0 ? (
+            <Card3D title="Expenses by category (3D)">
+              {expensePie.length === 0 ? (
                 <Empty3D label="No expenses in this range." />
               ) : (
                 <Suspense fallback={<Chart3DFallback />}>
-                  <Lines3D series={expenseSeries} labels={labels} currency={currency} />
+                  <Pie3D data={expensePie} currency={currency} />
                 </Suspense>
               )}
+              <Legend3D data={expensePie} currency={currency} />
             </Card3D>
           </div>
 
@@ -255,6 +212,20 @@ export default function Reports() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function Legend3D({ data, currency }: { data: PieDatum[]; currency: string }) {
+  if (data.length === 0) return null;
+  return (
+    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+      {data.map((d) => (
+        <span key={d.name} className="flex items-center gap-1.5 text-xs text-forest-dark dark:text-night-ink">
+          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: d.color }} />
+          {d.name} · {formatMoney(d.value, currency)}
+        </span>
+      ))}
     </div>
   );
 }

@@ -19,9 +19,9 @@ export default function PlanCards({ compact = false }: { compact?: boolean }) {
   const [currency, setCurrency] = useState("INR");
   const [rate, setRate] = useState(1); // INR -> dashboard currency
 
-  // Yearly billing is fully built but only surfaced once configured — always in
-  // development, and in production only when the server reports it's available.
-  const showYearly = import.meta.env.DEV || yearlyAvailable;
+  // Yearly billing is fully built but stays hidden (monthly only) until the yearly
+  // Razorpay plans are configured, at which point the server reports it available.
+  const showYearly = yearlyAvailable;
 
   // Show plan prices in the user's dashboard currency (prices are defined in INR).
   useEffect(() => {

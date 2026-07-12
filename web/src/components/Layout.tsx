@@ -12,8 +12,26 @@ const NAV_ITEMS = [
   { to: "/expenses", label: "Expenses", icon: "🧾" },
   { to: "/budgets", label: "Budgets", icon: "💼" },
   { to: "/reports", label: "Reports", icon: "📊" },
-  { to: "/profile", label: "Profile", icon: "👤" },
 ];
+
+/** Red power-off symbol used for the sign-out control. */
+function PowerIcon({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M12 3v9" />
+      <path d="M6.4 6.4a8 8 0 1 0 11.2 0" />
+    </svg>
+  );
+}
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { user, signOut } = useAuth();
@@ -139,14 +157,31 @@ export default function Layout({ children }: { children: ReactNode }) {
             {!collapsed && "Give feedback"}
           </button>
 
+          <NavLink
+            to="/profile"
+            title={collapsed ? "Profile" : undefined}
+            className={({ isActive }) =>
+              `flex items-center rounded-full font-semibold transition ${
+                collapsed ? "w-full justify-center py-2.5" : "w-full gap-3 px-4 py-2.5"
+              } ${
+                isActive
+                  ? "bg-forest text-cream shadow-card"
+                  : "text-forest-dark hover:bg-forest-50 dark:text-night-ink dark:hover:bg-white/5"
+              }`
+            }
+          >
+            <span className="text-lg">👤</span>
+            {!collapsed && "Profile"}
+          </NavLink>
+
           {collapsed ? (
             <button
               onClick={signOut}
               title={`Sign out (${user?.email ?? ""})`}
               aria-label="Sign out"
-              className="group flex w-full justify-center rounded-full py-2.5 text-lg text-coral hover:bg-coral/10"
+              className="flex w-full justify-center rounded-full py-2.5 text-coral transition hover:bg-coral/10"
             >
-              <span className="inline-block transition-transform group-hover:translate-x-0.5">🚪</span>
+              <PowerIcon className="h-5 w-5" />
             </button>
           ) : (
             <div className="rounded-xl2 bg-forest-50 p-3 dark:bg-white/5">
@@ -155,9 +190,9 @@ export default function Layout({ children }: { children: ReactNode }) {
               </p>
               <button
                 onClick={signOut}
-                className="group mt-1 flex items-center gap-1.5 text-xs font-semibold text-coral hover:underline"
+                className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-coral hover:underline"
               >
-                <span className="inline-block transition-transform group-hover:translate-x-0.5">🚪</span>
+                <PowerIcon className="h-4 w-4" />
                 Sign out
               </button>
             </div>

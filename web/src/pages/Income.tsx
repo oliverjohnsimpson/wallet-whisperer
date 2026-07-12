@@ -1,31 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { apiGet, apiSend } from "@/lib/api";
 import type { Category, Income, MonthlySummary } from "@/types";
-import { currentMonthStart, formatCompactMoney, formatMoney, formatMonthLabel } from "@/lib/format";
+import { currentMonthStart, formatMoney } from "@/lib/format";
 import { currencyNoun, findCurrency } from "@/lib/currencies";
-import { monthKeysBetween, monthsAgoStart, todayISO, type MonthPreset } from "@/lib/dateRange";
-import { CATEGORICAL_PALETTE, CHART_INK, OTHER_COLOR } from "@/lib/chartPalette";
+import { monthsAgoStart, todayISO, type MonthPreset } from "@/lib/dateRange";
 import { FilterSelect, FilterText, PresetButtons } from "@/components/ui/FilterControls";
 import IncomeRow from "@/components/IncomeRow";
 import IncomeModal from "@/components/IncomeModal";
+import CategoryBars from "@/components/infographics/CategoryBars";
 
 const ENTRY_TYPES = ["manual", "voice", "receipt", "penny", "email", "sms"] as const;
-const TOP_N = 5;
-
-/** A stable label for an income's "source" — the named source, else its category. */
-function sourceKey(i: Income): string {
-  return (i.source_name || i.income_categories?.label || "Other").trim() || "Other";
-}
 
 export default function IncomePage() {
   const [incomes, setIncomes] = useState<Income[]>([]);
@@ -63,6 +47,9 @@ export default function IncomePage() {
 
   useEffect(() => {
     load();
+    const onChange = () => load();
+    window.addEventListener("ww:data-changed", onChange);
+    return () => window.removeEventListener("ww:data-changed", onChange);
   }, []);
 
   async function handleDelete(income: Income) {
@@ -73,6 +60,7 @@ export default function IncomePage() {
 
   const currency = monthSummary?.primaryCurrency ?? "INR";
   const thisMonthTotal = monthSummary?.totals.income ?? 0;
+  const txnCount = incomes.filter((i) => i.received_date >= currentMonthStart()).length;
 
   function applyPreset(p: MonthPreset) {
     setPreset(p);
@@ -102,41 +90,10 @@ export default function IncomePage() {
     });
   }, [incomes, from, to, entryType, currencyFilter, sourceType, sourceName, keyword]);
 
-  const val = (i: Income) => (i.amount_primary != null ? Number(i.amount_primary) : i.currency === currency ? Number(i.amount) : 0);
-
-  const filteredTotal = useMemo(() => filtered.reduce((s, i) => s + val(i), 0), [filtered, currency]);
-
-  // Top Income Sources line chart (item 9): one line per top source over months.
-  const { chartData, topSources } = useMemo(() => {
-    const totalBySource = new Map<string, number>();
-    filtered.forEach((i) => totalBySource.set(sourceKey(i), (totalBySource.get(sourceKey(i)) ?? 0) + val(i)));
-    const ranked = [...totalBySource.entries()].sort((a, b) => b[1] - a[1]);
-    const top = ranked.slice(0, TOP_N).map(([name]) => name);
-    const hasOther = ranked.length > TOP_N;
-    const series = hasOther ? [...top, "Other"] : top;
-
-    const months = from && to ? monthKeysBetween(from, to) : [];
-    const byMonth = new Map<string, Record<string, number>>();
-    months.forEach((m) => byMonth.set(m, {}));
-    filtered.forEach((i) => {
-      const m = i.received_date.slice(0, 7);
-      const bucket = byMonth.get(m);
-      if (!bucket) return;
-      const key = top.includes(sourceKey(i)) ? sourceKey(i) : "Other";
-      bucket[key] = (bucket[key] ?? 0) + val(i);
-    });
-
-    const data = months.map((m) => {
-      const bucket = byMonth.get(m) ?? {};
-      const row: Record<string, number | string> = { label: formatMonthLabel(m, true) };
-      series.forEach((s) => (row[s] = Math.round(bucket[s] ?? 0)));
-      return row;
-    });
-
-    return { chartData: data, topSources: series };
-  }, [filtered, from, to, currency]);
-
-  const symbol = findCurrency(currency)?.symbol ?? currency;
+  const filteredTotal = useMemo(
+    () => filtered.reduce((s, i) => s + (i.amount_primary != null ? Number(i.amount_primary) : i.currency === currency ? Number(i.amount) : 0), 0),
+    [filtered, currency]
+  );
 
   return (
     <div className="p-8">
@@ -158,10 +115,16 @@ export default function IncomePage() {
         </button>
       </div>
 
-      <div className="mb-6 rounded-xl2 bg-forest p-5 text-cream shadow-soft sm:max-w-xs">
-        <p className="text-xs font-semibold uppercase tracking-wide text-cream/70">Income this month</p>
-        <p className="mt-1 font-display text-3xl font-extrabold">{formatMoney(thisMonthTotal, currency)}</p>
-        <p className="mt-1 text-xs text-cream/70">Converted to your {currency} default currency</p>
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="rounded-xl2 bg-forest p-5 text-cream shadow-soft">
+          <p className="text-xs font-semibold uppercase tracking-wide text-cream/70">Income this month</p>
+          <p className="mt-1 font-display text-3xl font-extrabold">{formatMoney(thisMonthTotal, currency)}</p>
+          <p className="mt-1 text-xs text-cream/70">{txnCount} entries</p>
+        </div>
+        <div className="rounded-xl2 bg-white p-5 shadow-card dark:bg-night-card sm:col-span-2">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-forest-light dark:text-night-muted">Top income sources this month</p>
+          <CategoryBars items={monthSummary?.byIncomeCategory ?? []} currency={currency} limit={4} emptyLabel="No income logged this month yet." />
+        </div>
       </div>
 
       {/* Filters */}
@@ -189,43 +152,14 @@ export default function IncomePage() {
         </p>
       </div>
 
-      {/* Top Income Sources chart (item 9) */}
-      <div className="mb-8 rounded-xl2 bg-white p-6 shadow-card dark:bg-night-card">
-        <h2 className="mb-4 font-display text-lg font-bold text-forest-dark dark:text-night-ink">Top Income Sources</h2>
-        {topSources.length === 0 || chartData.length === 0 ? (
-          <p className="py-8 text-center text-forest-light dark:text-night-muted">No income in this range to chart yet.</p>
-        ) : (
-          <ResponsiveContainer width="100%" height={320}>
-            <LineChart data={chartData} margin={{ left: 8, right: 16 }}>
-              <CartesianGrid vertical={false} stroke={CHART_INK.grid} />
-              <XAxis dataKey="label" stroke={CHART_INK.muted} fontSize={12} />
-              <YAxis tickFormatter={(v) => formatCompactMoney(v, currency)} stroke={CHART_INK.muted} fontSize={12} width={64} />
-              <Tooltip formatter={(v: number) => formatMoney(v, currency)} contentStyle={{ borderRadius: 12, border: "1px solid #e1e0d9" }} />
-              <Legend />
-              {topSources.map((s, idx) => (
-                <Line
-                  key={s}
-                  type="monotone"
-                  dataKey={s}
-                  name={s}
-                  stroke={s === "Other" ? OTHER_COLOR : CATEGORICAL_PALETTE[idx % CATEGORICAL_PALETTE.length]}
-                  strokeWidth={2}
-                  dot={{ r: 2 }}
-                  activeDot={{ r: 5 }}
-                />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-        )}
-        <p className="mt-1 text-xs text-forest-light dark:text-night-muted">Amounts shown in {symbol} {currency}.</p>
-      </div>
-
+      <h2 className="mb-4 font-display text-xl font-bold text-forest-dark dark:text-night-ink">All income</h2>
       {!loading && filtered.length === 0 && (
         <p className="rounded-xl2 bg-white p-8 text-center text-forest-light shadow-card dark:bg-night-card dark:text-night-muted">
-          No income matches these filters. Try widening the date range or clearing a filter.
+          {incomes.length === 0
+            ? "No income logged yet. Add your salary, a dividend credit, or interest — by voice, payslip photo, or pasting a bank alert."
+            : "No income matches these filters. Try widening the date range or clearing a filter."}
         </p>
       )}
-
       <div className="overflow-hidden rounded-xl2 bg-white shadow-card dark:bg-night-card">
         {filtered.map((i) => (
           <IncomeRow

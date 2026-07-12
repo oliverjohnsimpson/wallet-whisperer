@@ -3,10 +3,10 @@ export default function SavingsGauge({ rate, size = 150 }: { rate: number; size?
   const pct = Math.max(-1, Math.min(1, rate));
   const positive = pct >= 0;
   const stroke = 12;
-  // Inset the ring so the stroke (and its rounded caps) sit comfortably *inside*
-  // the SVG box, centered with breathing room instead of hugging the border.
-  const inset = 10;
-  const r = (size - stroke) / 2 - inset;
+  // Ring fills the SVG (with just the stroke's own half-width as margin) so it
+  // reads as a solid, well-proportioned dial — the small cream bezel around it
+  // comes from the p-1 wrapper on the dashboard.
+  const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const filled = Math.min(Math.abs(pct), 1);
   const color = positive ? "#2D6A4F" : "#E86A5C";
